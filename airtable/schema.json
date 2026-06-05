@@ -1,0 +1,72 @@
+{
+  "nombre_base": "Kreditton — Pipeline Prospectos",
+  "tablas": [
+    {
+      "nombre": "Prospectos",
+      "descripcion": "Registro central de todos los prospectos de crédito hipotecario",
+      "campos": [
+        { "nombre": "ID",                  "tipo": "autonumber",     "descripcion": "Identificador único autoincremental" },
+        { "nombre": "Fecha registro",      "tipo": "dateTime",       "descripcion": "Fecha y hora de creación del registro" },
+        { "nombre": "Tipo cliente",        "tipo": "singleSelect",   "opciones": ["B2B", "B2C"],                                        "descripcion": "Origen: directo (B2C) o a través de aliado (B2B)" },
+        { "nombre": "Nombre aliado",       "tipo": "singleLineText", "descripcion": "Nombre de la constructora o aliado (solo B2B)" },
+        { "nombre": "Tipo documento",      "tipo": "singleSelect",   "opciones": ["CC", "CE", "PA"],                                    "descripcion": "Tipo de documento de identidad" },
+        { "nombre": "Número documento",    "tipo": "singleLineText", "descripcion": "Número de identificación del prospecto" },
+        { "nombre": "Nombre completo",     "tipo": "singleLineText", "descripcion": "Nombre y apellidos del solicitante" },
+        { "nombre": "Teléfono",            "tipo": "phoneNumber",    "descripcion": "" },
+        { "nombre": "Email",               "tipo": "email",          "descripcion": "" },
+        { "nombre": "Perfil financiero",   "tipo": "singleSelect",   "opciones": ["empleado", "independiente", "pensionado"],           "descripcion": "" },
+        { "nombre": "Ingresos",            "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Ingresos mensuales en pesos colombianos" },
+        { "nombre": "Score crédito",       "tipo": "number",         "descripcion": "Score Datacrédito/TransUnion (300-900)" },
+        { "nombre": "Reportes negativos",  "tipo": "checkbox",       "descripcion": "¿Tiene reportes negativos en centrales de riesgo?" },
+        { "nombre": "Valor inmueble",      "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Valor comercial del inmueble" },
+        { "nombre": "Monto solicitado",    "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Valor del crédito solicitado" },
+        { "nombre": "Tipo inmueble",       "tipo": "singleSelect",   "opciones": ["nuevo", "usado"],                                    "descripcion": "" },
+        { "nombre": "Subtipo inmueble",    "tipo": "singleSelect",   "opciones": ["apartamento", "casa"],                               "descripcion": "" },
+        { "nombre": "Plazo meses",         "tipo": "number",         "descripcion": "Plazo del crédito en meses (60-240)" },
+        { "nombre": "Documentación",       "tipo": "singleSelect",   "opciones": ["completa", "parcial", "incompleta"],                 "descripcion": "Estado de la documentación del prospecto" },
+        { "nombre": "Observaciones",       "tipo": "longText",       "descripcion": "Notas adicionales del asesor" },
+        { "nombre": "LTV",                 "tipo": "percent",        "descripcion": "Loan-to-Value: monto/valor_inmueble" },
+        { "nombre": "Cuota sin seguro",    "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Cuota financiera calculada (PMT)" },
+        { "nombre": "Seguro vida",         "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Seguro de vida estimado" },
+        { "nombre": "Seguro incendio",     "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Seguro de incendio y terremoto estimado" },
+        { "nombre": "Cuota total",         "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Cuota total (sin seguro + seguros)" },
+        { "nombre": "Cuota máxima",        "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Máximo permitido = ingresos × 40%" },
+        { "nombre": "Ingreso mín. req.",   "tipo": "currency",       "moneda": "COP",                                                   "descripcion": "Ingreso mínimo para soportar esta cuota" },
+        { "nombre": "Score interno",       "tipo": "number",         "descripcion": "Score Kreditton de 0 a 100" },
+        { "nombre": "Viabilidad",          "tipo": "singleSelect",   "opciones": ["Alta", "Media", "Baja"],                             "descripcion": "Clasificación final de viabilidad" },
+        { "nombre": "Factores clasif.",    "tipo": "longText",       "descripcion": "Motivos de la clasificación (JSON array)" },
+        { "nombre": "Diagnóstico IA",      "tipo": "longText",       "descripcion": "Análisis narrativo generado por IA" },
+        { "nombre": "Recomendación",       "tipo": "longText",       "descripcion": "Recomendación para el asesor comercial" },
+        { "nombre": "Estado",              "tipo": "singleSelect",   "opciones": ["nuevo", "en_revision", "asignado", "cerrado"],       "descripcion": "Estado de gestión del prospecto" },
+        { "nombre": "Asesor asignado",     "tipo": "singleLineText", "descripcion": "Nombre del asesor que gestiona el caso" },
+        { "nombre": "Notas internas",      "tipo": "longText",       "descripcion": "Notas del equipo operativo interno" }
+      ],
+      "vistas_sugeridas": [
+        { "nombre": "Pipeline completo",   "tipo": "grid",   "orden": "Fecha registro DESC" },
+        { "nombre": "Alta prioridad",      "tipo": "grid",   "filtro": "Viabilidad = 'Alta' AND Estado != 'cerrado'" },
+        { "nombre": "Por viabilidad",      "tipo": "kanban", "campo_columna": "Viabilidad" },
+        { "nombre": "Por estado",          "tipo": "kanban", "campo_columna": "Estado" }
+      ]
+    },
+    {
+      "nombre": "Parametros",
+      "descripcion": "Configuración del motor de scoring (referencia, no se usa en fórmulas de Airtable)",
+      "campos": [
+        { "nombre": "Parámetro",   "tipo": "singleLineText" },
+        { "nombre": "Valor",       "tipo": "number" },
+        { "nombre": "Descripción", "tipo": "longText" }
+      ],
+      "registros_iniciales": [
+        { "Parámetro": "TASA_EA",                 "Valor": 0.155,   "Descripción": "Tasa efectiva anual referencia del mercado hipotecario colombiano" },
+        { "Parámetro": "MAX_DEUDA_RATIO",         "Valor": 0.40,    "Descripción": "Porcentaje máximo de endeudamiento sobre ingresos" },
+        { "Parámetro": "ALTA_LTV_MAX",            "Valor": 0.80,    "Descripción": "LTV máximo para clasificación Alta" },
+        { "Parámetro": "ALTA_SCORE_MIN",          "Valor": 700,     "Descripción": "Score mínimo para clasificación Alta" },
+        { "Parámetro": "MEDIA_LTV_MAX",           "Valor": 0.90,    "Descripción": "LTV máximo para clasificación Media" },
+        { "Parámetro": "MEDIA_SCORE_MIN",         "Valor": 600,     "Descripción": "Score mínimo para clasificación Media" },
+        { "Parámetro": "SEGURO_VIDA_FACTOR",      "Valor": 0.00018, "Descripción": "Factor de seguro de vida (1800/10,000,000)" },
+        { "Parámetro": "SEGURO_INCENDIO_APTO",    "Valor": 0.0001235,"Descripción": "Factor seguro incendio apartamento (130*95%/1,000,000)" },
+        { "Parámetro": "SEGURO_INCENDIO_CASA",    "Valor": 0.0001275,"Descripción": "Factor seguro incendio casa (150*85%/1,000,000)" }
+      ]
+    }
+  ]
+}
