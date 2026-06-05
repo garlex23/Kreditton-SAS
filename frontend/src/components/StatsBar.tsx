@@ -2,8 +2,9 @@ import type { Stats } from '../types'
 
 export function StatsBar({ stats }: { stats: Stats }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
       <StatCard label="Total prospectos" value={stats.total} color="text-gray-900" bg="bg-white" />
+      <StatCard label="Sin evaluar" value={stats.sin_evaluar} color="text-gray-500" bg="bg-gray-50" border="border-gray-200" />
       <StatCard label="Alta viabilidad" value={stats.por_viabilidad.Alta} color="text-green-700" bg="bg-green-50" border="border-green-200" />
       <StatCard label="Media viabilidad" value={stats.por_viabilidad.Media} color="text-yellow-700" bg="bg-yellow-50" border="border-yellow-200" />
       <StatCard label="Baja viabilidad" value={stats.por_viabilidad.Baja} color="text-red-700" bg="bg-red-50" border="border-red-200" />

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Prospecto, Estado } from '../types'
 import { ViabilityBadge } from './ViabilityBadge'
 import { StateBadge } from './StateBadge'
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function ProspectModal({ prospecto: initial, onClose, onUpdated }: Props) {
+  const navigate = useNavigate()
   const [prospecto, setProspecto] = useState(initial)
   const [tab, setTab] = useState<'resumen' | 'score' | 'ia'>('resumen')
   const [saving, setSaving] = useState(false)
@@ -27,38 +29,50 @@ export function ProspectModal({ prospecto: initial, onClose, onUpdated }: Props)
     }
   }
 
+  const tieneEval = prospecto.evaluacion_activa_id !== null
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="bg-brand-dark text-white px-6 py-4 rounded-t-2xl flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-lg font-bold">{prospecto.nombre_completo}</h2>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${prospecto.tipo_cliente === 'B2B' ? 'bg-blue-500' : 'bg-gray-500'}`}>
+              <h2 className="text-lg font-bold truncate">{prospecto.nombre_completo}</h2>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${prospecto.tipo_cliente === 'B2B' ? 'bg-blue-500' : 'bg-gray-500'}`}>
                 {prospecto.tipo_cliente}
               </span>
             </div>
-            {prospecto.nombre_aliado && (
-              <p className="text-xs text-gray-400 mt-0.5">Aliado: {prospecto.nombre_aliado}</p>
-            )}
+            {prospecto.nombre_aliado && <p className="text-xs text-gray-400 mt-0.5">Aliado: {prospecto.nombre_aliado}</p>}
             <p className="text-xs text-gray-400 mt-1">{formatDate(prospecto.fecha_registro)} · {prospecto.email}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none mt-0.5">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none mt-0.5 flex-shrink-0">✕</button>
         </div>
 
-        {/* Viabilidad banner */}
-        <div className={`px-6 py-3 flex items-center justify-between ${
-          prospecto.viabilidad === 'Alta' ? 'bg-green-50 border-b border-green-200' :
-          prospecto.viabilidad === 'Media' ? 'bg-yellow-50 border-b border-yellow-200' :
-          'bg-red-50 border-b border-red-200'
-        }`}>
-          <ViabilityBadge viabilidad={prospecto.viabilidad} size="lg" />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">Score: <strong>{prospecto.score_interno}/100</strong></span>
+        {/* Banner de viabilidad o alerta sin evaluar */}
+        {tieneEval && prospecto.viabilidad ? (
+          <div className={`px-6 py-3 flex items-center justify-between ${
+            prospecto.viabilidad === 'Alta' ? 'bg-green-50 border-b border-green-200' :
+            prospecto.viabilidad === 'Media' ? 'bg-yellow-50 border-b border-yellow-200' :
+            'bg-red-50 border-b border-red-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              <ViabilityBadge viabilidad={prospecto.viabilidad} size="lg" />
+              <span className="text-sm text-gray-600">
+                Score: <strong>{prospecto.score_interno}/100</strong>
+                {prospecto.numero_evaluacion && prospecto.numero_evaluacion > 1 && (
+                  <span className="ml-2 text-xs text-gray-400">(eval. #{prospecto.numero_evaluacion})</span>
+                )}
+              </span>
+            </div>
             <StateBadge estado={prospecto.estado} />
           </div>
-        </div>
+        ) : (
+          <div className="px-6 py-3 bg-yellow-50 border-b border-yellow-200 flex items-center justify-between">
+            <span className="text-sm text-yellow-800 font-medium">⚠ Sin evaluación — pendiente de preevaluar</span>
+            <StateBadge estado={prospecto.estado} />
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b px-6 gap-1">
@@ -70,7 +84,7 @@ export function ProspectModal({ prospecto: initial, onClose, onUpdated }: Props)
                 tab === t ? 'border-brand-yellow text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {t === 'resumen' ? 'Resumen financiero' : t === 'score' ? 'Detalle score' : 'Diagnóstico IA'}
+              {t === 'resumen' ? 'Resumen' : t === 'score' ? 'Score' : 'Diagnóstico IA'}
             </button>
           ))}
         </div>
@@ -82,10 +96,10 @@ export function ProspectModal({ prospecto: initial, onClose, onUpdated }: Props)
           {tab === 'ia' && <TabIA p={prospecto} />}
         </div>
 
-        {/* Footer: estado change */}
+        {/* Footer */}
         <div className="border-t px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-500">Cambiar estado:</span>
+            <span className="text-xs text-gray-500">Estado:</span>
             {(['nuevo', 'en_revision', 'asignado', 'cerrado'] as Estado[]).map(e => (
               <button
                 key={e}
@@ -101,14 +115,22 @@ export function ProspectModal({ prospecto: initial, onClose, onUpdated }: Props)
               </button>
             ))}
           </div>
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">Cerrar</button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/prospectos/${prospecto.id}`)}
+              className="text-sm font-semibold text-brand-yellow hover:underline"
+            >
+              Abrir expediente →
+            </button>
+            <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">Cerrar</button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function Row({ label, value }: { label: string; value: string | number }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between py-1.5 text-sm border-b border-gray-100 last:border-0">
       <span className="text-gray-500">{label}</span>
@@ -117,34 +139,49 @@ function Row({ label, value }: { label: string; value: string | number }) {
   )
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2 mt-4 first:mt-0">{children}</h4>
+}
+
 function TabResumen({ p }: { p: Prospecto }) {
   return (
-    <div className="space-y-5">
-      <Section title="Datos del prospecto">
+    <div className="space-y-4">
+      <div>
+        <SectionTitle>Datos del prospecto</SectionTitle>
         <Row label="Documento" value={`${p.tipo_documento} ${p.numero_documento}`} />
         <Row label="Perfil financiero" value={p.perfil_financiero} />
         <Row label="Ingresos mensuales" value={formatCOP(p.ingresos)} />
-        <Row label="Score crédito externo" value={p.score_credito} />
-        <Row label="Reportes negativos" value={p.reportes_negativos ? 'Sí' : 'No'} />
-        <Row label="Documentación" value={p.documentacion} />
-      </Section>
-      <Section title="Crédito solicitado">
-        <Row label="Valor del inmueble" value={formatCOP(p.valor_inmueble)} />
-        <Row label="Monto solicitado" value={formatCOP(p.monto_solicitado)} />
-        <Row label="LTV" value={formatPct(p.ltv)} />
-        <Row label="Plazo" value={`${p.plazo_meses} meses (${(p.plazo_meses / 12).toFixed(0)} años)`} />
-        <Row label="Tipo de inmueble" value={`${p.tipo_inmueble} – ${p.subtipo_inmueble}`} />
-      </Section>
-      <Section title="Cuota estimada">
-        <Row label="Cuota sin seguro" value={formatCOP(p.cuota_sin_seguro)} />
-        <Row label="Seguro de vida" value={formatCOP(p.seguro_vida)} />
-        <Row label="Seguro incendio/terremoto" value={formatCOP(p.seguro_incendio)} />
-        <Row label="CUOTA TOTAL" value={formatCOP(p.cuota_total)} />
-        <Row label="Cuota máxima permitida (40%)" value={formatCOP(p.cuota_maxima)} />
-        <Row label="Ingreso mínimo requerido" value={formatCOP(p.ingreso_minimo_requerido)} />
-      </Section>
+        {p.score_credito !== null && <Row label="Score crédito externo" value={p.score_credito} />}
+        {p.score_credito !== null && <Row label="Reportes negativos" value={p.reportes_negativos ? 'Sí' : 'No'} />}
+        {p.documentacion && <Row label="Documentación" value={p.documentacion} />}
+      </div>
+
+      {p.valor_inmueble && (
+        <div>
+          <SectionTitle>Crédito solicitado</SectionTitle>
+          <Row label="Valor del inmueble" value={formatCOP(p.valor_inmueble)} />
+          <Row label="Monto solicitado" value={formatCOP(p.monto_solicitado!)} />
+          {p.ltv && <Row label="LTV" value={formatPct(p.ltv)} />}
+          {p.plazo_meses && <Row label="Plazo" value={`${p.plazo_meses} meses (${Math.round(p.plazo_meses / 12)} años)`} />}
+          {p.tipo_inmueble && <Row label="Tipo inmueble" value={`${p.tipo_inmueble} – ${p.subtipo_inmueble}`} />}
+        </div>
+      )}
+
+      {p.cuota_total && (
+        <div>
+          <SectionTitle>Cuota estimada</SectionTitle>
+          <Row label="Cuota sin seguro" value={formatCOP(p.cuota_sin_seguro!)} />
+          <Row label="Seguro de vida" value={formatCOP(p.seguro_vida!)} />
+          <Row label="Seguro incendio" value={formatCOP(p.seguro_incendio!)} />
+          <Row label="CUOTA TOTAL" value={formatCOP(p.cuota_total)} />
+          <Row label="Cuota máxima (40%)" value={formatCOP(p.cuota_maxima!)} />
+          <Row label="Ingreso mín. requerido" value={formatCOP(p.ingreso_minimo_requerido!)} />
+        </div>
+      )}
+
       {p.factores_clasificacion.length > 0 && (
-        <Section title="Factores de clasificación">
+        <div>
+          <SectionTitle>Factores de clasificación</SectionTitle>
           <ul className="space-y-1 mt-1">
             {p.factores_clasificacion.map((f, i) => (
               <li key={i} className="text-sm flex gap-2">
@@ -153,13 +190,20 @@ function TabResumen({ p }: { p: Prospecto }) {
               </li>
             ))}
           </ul>
-        </Section>
+        </div>
       )}
     </div>
   )
 }
 
 function TabScore({ p }: { p: Prospecto }) {
+  if (!p.score_interno) {
+    return (
+      <div className="text-center py-10 text-gray-400">
+        <p className="text-sm">Sin evaluación. Ejecute la preevaluación desde el expediente.</p>
+      </div>
+    )
+  }
   const total = p.detalle_score.reduce((s, d) => s + (d.maximo > 0 ? d.maximo : 0), 0)
   return (
     <div>
@@ -177,7 +221,7 @@ function TabScore({ p }: { p: Prospecto }) {
         <thead>
           <tr className="text-left text-xs text-gray-400 border-b">
             <th className="pb-2 font-medium">Componente</th>
-            <th className="pb-2 font-medium text-right">Puntos</th>
+            <th className="pb-2 font-medium text-right">Pts</th>
             <th className="pb-2 font-medium text-right">Máx.</th>
           </tr>
         </thead>
@@ -212,32 +256,25 @@ function TabIA({ p }: { p: Prospecto }) {
     return (
       <div className="text-center py-10 text-gray-400">
         <p className="text-4xl mb-3">🤖</p>
-        <p className="text-sm">No hay diagnóstico IA disponible.</p>
-        <p className="text-xs mt-1">Configure ANTHROPIC_API_KEY en el backend para activarlo.</p>
+        <p className="text-sm">Sin diagnóstico IA disponible.</p>
+        <p className="text-xs mt-1">Ejecute la preevaluación con ANTHROPIC_API_KEY configurada.</p>
       </div>
     )
   }
   return (
     <div className="space-y-5">
-      <Section title="Diagnóstico financiero">
+      <div>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Diagnóstico financiero</h4>
         <p className="text-sm text-gray-700 leading-relaxed">{p.diagnostico_ia}</p>
-      </Section>
+      </div>
       {p.recomendacion_asesor && (
-        <Section title="Recomendación para el asesor comercial">
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Recomendación para el asesor</h4>
           <div className="bg-brand-yellow/10 border border-brand-yellow/30 rounded-lg p-3">
             <p className="text-sm text-gray-800 leading-relaxed">{p.recomendacion_asesor}</p>
           </div>
-        </Section>
+        </div>
       )}
-    </div>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{title}</h4>
-      {children}
     </div>
   )
 }

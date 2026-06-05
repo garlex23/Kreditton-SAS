@@ -1,22 +1,24 @@
 {
-  "name": "Kreditton — Preevaluación Hipotecaria",
+  "name": "Kreditton — Preevaluación Hipotecaria v2",
+  "_descripcion": "Arquitectura v2: JotForm captura solo datos externos. Kreditton completa score, reportes y documentación internamente antes de evaluar.",
   "nodes": [
     {
       "id": "1",
       "name": "Webhook JotForm",
       "type": "n8n-nodes-base.webhook",
-      "position": [240, 300],
+      "position": [200, 300],
       "parameters": {
         "path": "kreditton-prospecto",
         "httpMethod": "POST",
         "responseMode": "responseNode"
-      }
+      },
+      "_nota": "JotForm envía SOLO datos externos del cliente/aliado. Score, reportes y documentación los completa Kreditton internamente."
     },
     {
       "id": "2",
-      "name": "Normalizar datos",
+      "name": "Normalizar datos externos",
       "type": "n8n-nodes-base.set",
-      "position": [460, 300],
+      "position": [420, 300],
       "parameters": {
         "values": {
           "string": [
@@ -27,118 +29,127 @@
             { "name": "nombre_completo",   "value": "={{ $json.body.q7_nombreCompleto }}" },
             { "name": "telefono",          "value": "={{ $json.body.q8_telefono }}" },
             { "name": "email",             "value": "={{ $json.body.q9_email }}" },
-            { "name": "perfil_financiero", "value": "={{ $json.body.q10_perfilFinanciero }}" },
-            { "name": "tipo_inmueble",     "value": "={{ $json.body.q14_tipoInmueble }}" },
-            { "name": "subtipo_inmueble",  "value": "={{ $json.body.q15_subtipoInmueble }}" },
-            { "name": "documentacion",     "value": "={{ $json.body.q18_documentacion }}" }
+            { "name": "perfil_financiero", "value": "={{ $json.body.q10_perfilFinanciero }}" }
           ],
           "number": [
-            { "name": "ingresos",          "value": "={{ Number($json.body.q11_ingresos) }}" },
-            { "name": "score_credito",     "value": "={{ Number($json.body.q12_scoreCredito) }}" },
-            { "name": "valor_inmueble",    "value": "={{ Number($json.body.q13_valorInmueble) }}" },
-            { "name": "monto_solicitado",  "value": "={{ Number($json.body.q16_montoSolicitado) }}" },
-            { "name": "plazo_meses",       "value": "={{ Number($json.body.q17_plazoMeses) }}" }
-          ],
-          "boolean": [
-            { "name": "reportes_negativos", "value": "={{ $json.body.q19_reportesNegativos === 'true' }}" }
+            { "name": "ingresos", "value": "={{ Number($json.body.q11_ingresos) }}" }
           ]
         }
       }
     },
     {
       "id": "3",
-      "name": "Motor Scoring",
-      "type": "n8n-nodes-base.function",
-      "position": [680, 300],
+      "name": "Verificar duplicado",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [640, 300],
       "parameters": {
-        "functionCode": "// ═══════════════════════════════════════════════════════\n// MOTOR DE PREEVALUACIÓN KREDITTON — Parámetros editables\n// ═══════════════════════════════════════════════════════\nconst PARAMETROS = {\n  TASA_EA: 0.155,\n  MAX_DEUDA_RATIO: 0.40,\n  ALTA_LTV_MAX: 0.80,\n  ALTA_SCORE_MIN: 700,\n  MEDIA_LTV_MAX: 0.90,\n  MEDIA_SCORE_MIN: 600,\n  SEGURO_VIDA_FACTOR: 1800 / 10000000,\n  SEGURO_INCENDIO_APTO: (130 * 0.95) / 1000000,\n  SEGURO_INCENDIO_CASA: (150 * 0.85) / 1000000,\n};\n\nconst d = items[0].json;\n\n// ── Cálculos financieros ────────────────────────────────\nconst tasaMV = Math.pow(1 + PARAMETROS.TASA_EA, 1/12) - 1;\nconst cuotaSinSeguro = (tasaMV * d.monto_solicitado) / (1 - Math.pow(1 + tasaMV, -d.plazo_meses));\nconst seguroVida = d.monto_solicitado * PARAMETROS.SEGURO_VIDA_FACTOR;\nconst seguroIncendio = d.valor_inmueble * (d.subtipo_inmueble === 'apartamento' ? PARAMETROS.SEGURO_INCENDIO_APTO : PARAMETROS.SEGURO_INCENDIO_CASA);\nconst cuotaTotal = cuotaSinSeguro + seguroVida + seguroIncendio;\nconst cuotaMaxima = d.ingresos * PARAMETROS.MAX_DEUDA_RATIO;\nconst ltv = d.monto_solicitado / d.valor_inmueble;\n\n// ── Score interno (0-100) ───────────────────────────────\nlet score = 0;\nconst ratio = cuotaTotal / d.ingresos;\nif (ratio <= 0.25) score += 40;\nelse if (ratio <= 0.30) score += 35;\nelse if (ratio <= 0.35) score += 25;\nelse if (ratio <= 0.40) score += 10;\n\nif (ltv <= 0.60) score += 30;\nelse if (ltv <= 0.70) score += 25;\nelse if (ltv <= 0.80) score += 20;\nelse if (ltv <= 0.90) score += 10;\n\nif (d.score_credito >= 750) score += 20;\nelse if (d.score_credito >= 700) score += 17;\nelse if (d.score_credito >= 650) score += 12;\nelse if (d.score_credito >= 600) score += 8;\n\nif (d.documentacion === 'completa') score += 10;\nelse if (d.documentacion === 'parcial') score += 5;\nif (d.reportes_negativos) score = Math.max(0, score - 15);\n\n// ── Viabilidad ──────────────────────────────────────────\nlet viabilidad;\nif (cuotaTotal > cuotaMaxima || ltv > PARAMETROS.MEDIA_LTV_MAX || d.score_credito < PARAMETROS.MEDIA_SCORE_MIN || d.reportes_negativos || d.documentacion === 'incompleta') {\n  viabilidad = 'Baja';\n} else if (cuotaTotal <= cuotaMaxima && ltv <= PARAMETROS.ALTA_LTV_MAX && d.score_credito >= PARAMETROS.ALTA_SCORE_MIN && d.documentacion === 'completa') {\n  viabilidad = 'Alta';\n} else {\n  viabilidad = 'Media';\n}\n\nreturn [{ json: { ...d, cuotaSinSeguro, seguroVida, seguroIncendio, cuotaTotal, cuotaMaxima, ltv, score_interno: score, viabilidad } }];"
+        "method": "GET",
+        "url": "=http://localhost:3001/api/prospectos/buscar?numero_documento={{ encodeURIComponent($json.numero_documento) }}",
+        "_nota": "Retorna null si es nuevo, o el prospecto existente si ya está registrado"
       }
     },
     {
       "id": "4",
-      "name": "Diagnóstico IA (Claude)",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [900, 300],
+      "name": "¿Es duplicado?",
+      "type": "n8n-nodes-base.if",
+      "position": [860, 300],
       "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "headers": {
-          "entries": [
-            { "name": "x-api-key", "value": "={{ $credentials.anthropicApiKey }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "content-type", "value": "application/json" }
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.id !== undefined && $json.id !== null }}",
+              "operation": "equal",
+              "value2": true
+            }
           ]
-        },
-        "body": {
-          "contentType": "json",
-          "jsonParameters": true,
-          "bodyParametersJson": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 512,\n  \"system\": \"Eres analista financiero de Kreditton SAS, intermediario hipotecario. Responde solo con JSON: {diagnostico, recomendacion}. Español formal.\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"Prospecto: {{$json.nombre_completo}}, ingresos: {{$json.ingresos}}, LTV: {{($json.ltv*100).toFixed(1)}}%, score crédito: {{$json.score_credito}}, cuota total: {{$json.cuotaTotal.toFixed(0)}}, viabilidad: {{$json.viabilidad}}, score interno: {{$json.score_interno}}/100. Genera diagnóstico financiero y recomendación para el asesor comercial.\" }]\n}"
         }
       }
     },
     {
-      "id": "5",
-      "name": "Escribir en Airtable",
+      "id": "5a",
+      "name": "Registrar prospecto nuevo",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1080, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/prospectos",
+        "body": {
+          "contentType": "json",
+          "jsonParameters": true,
+          "bodyParametersJson": "={{ JSON.stringify({ tipo_cliente: $('Normalizar datos externos').item.json.tipo_cliente, nombre_aliado: $('Normalizar datos externos').item.json.nombre_aliado, tipo_documento: $('Normalizar datos externos').item.json.tipo_documento, numero_documento: $('Normalizar datos externos').item.json.numero_documento, nombre_completo: $('Normalizar datos externos').item.json.nombre_completo, telefono: $('Normalizar datos externos').item.json.telefono, email: $('Normalizar datos externos').item.json.email, perfil_financiero: $('Normalizar datos externos').item.json.perfil_financiero, ingresos: $('Normalizar datos externos').item.json.ingresos }) }}"
+        }
+      }
+    },
+    {
+      "id": "5b",
+      "name": "Prospecto existente (ignorar o actualizar)",
+      "type": "n8n-nodes-base.noOp",
+      "position": [1080, 420],
+      "_nota": "Si ya existe, no se crea duplicado. El equipo Kreditton agrega la nueva evaluación desde el expediente interno."
+    },
+    {
+      "id": "6",
+      "name": "Registrar en Airtable",
       "type": "n8n-nodes-base.airtable",
-      "position": [1120, 300],
+      "position": [1300, 200],
       "parameters": {
         "operation": "create",
         "application": "YOUR_AIRTABLE_BASE_ID",
         "table": "Prospectos",
         "fields": {
-          "Tipo cliente":         "={{ $('Motor Scoring').item.json.tipo_cliente }}",
-          "Nombre aliado":        "={{ $('Motor Scoring').item.json.nombre_aliado }}",
-          "Nombre completo":      "={{ $('Motor Scoring').item.json.nombre_completo }}",
-          "Email":                "={{ $('Motor Scoring').item.json.email }}",
-          "Teléfono":             "={{ $('Motor Scoring').item.json.telefono }}",
-          "Ingresos":             "={{ $('Motor Scoring').item.json.ingresos }}",
-          "Score crédito":        "={{ $('Motor Scoring').item.json.score_credito }}",
-          "Valor inmueble":       "={{ $('Motor Scoring').item.json.valor_inmueble }}",
-          "Monto solicitado":     "={{ $('Motor Scoring').item.json.monto_solicitado }}",
-          "LTV":                  "={{ $('Motor Scoring').item.json.ltv }}",
-          "Cuota total":          "={{ $('Motor Scoring').item.json.cuotaTotal }}",
-          "Cuota máxima":         "={{ $('Motor Scoring').item.json.cuotaMaxima }}",
-          "Score interno":        "={{ $('Motor Scoring').item.json.score_interno }}",
-          "Viabilidad":           "={{ $('Motor Scoring').item.json.viabilidad }}",
-          "Diagnóstico IA":       "={{ JSON.parse($json.content[0].text).diagnostico }}",
-          "Recomendación asesor": "={{ JSON.parse($json.content[0].text).recomendacion }}",
-          "Estado":               "Nuevo",
-          "Fecha registro":       "={{ new Date().toISOString() }}"
-        }
-      }
-    },
-    {
-      "id": "6",
-      "name": "Notificar equipo Kreditton",
-      "type": "n8n-nodes-base.emailSend",
-      "position": [1340, 300],
-      "parameters": {
-        "fromEmail": "sistema@kreditton.com",
-        "toEmail": "operaciones@kreditton.com",
-        "subject": "=[KREDITTON] Nuevo prospecto {{$('Motor Scoring').item.json.viabilidad}} viabilidad: {{$('Motor Scoring').item.json.nombre_completo}}",
-        "emailType": "html",
-        "message": "=<div style='font-family:sans-serif;max-width:600px'>\n<div style='background:#111;padding:20px;border-radius:8px 8px 0 0'>\n<h2 style='color:#F5C518;margin:0'>Kreditton — Nuevo Prospecto</h2>\n</div>\n<div style='border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px'>\n<table width='100%'>\n<tr><td style='color:#6b7280;width:40%'>Prospecto</td><td><b>{{$('Motor Scoring').item.json.nombre_completo}}</b></td></tr>\n<tr><td style='color:#6b7280'>Origen</td><td>{{$('Motor Scoring').item.json.tipo_cliente}}{{$('Motor Scoring').item.json.nombre_aliado ? ' — ' + $('Motor Scoring').item.json.nombre_aliado : ''}}</td></tr>\n<tr><td style='color:#6b7280'>Ingresos</td><td>$ {{Number($('Motor Scoring').item.json.ingresos).toLocaleString('es-CO')}}</td></tr>\n<tr><td style='color:#6b7280'>Monto solicitado</td><td>$ {{Number($('Motor Scoring').item.json.monto_solicitado).toLocaleString('es-CO')}}</td></tr>\n<tr><td style='color:#6b7280'>LTV</td><td>{{($('Motor Scoring').item.json.ltv*100).toFixed(1)}}%</td></tr>\n<tr><td style='color:#6b7280'>Score interno</td><td>{{$('Motor Scoring').item.json.score_interno}}/100</td></tr>\n<tr><td style='color:#6b7280'><b>VIABILIDAD</b></td><td><b style='color:{{$('Motor Scoring').item.json.viabilidad === 'Alta' ? 'green' : $('Motor Scoring').item.json.viabilidad === 'Media' ? 'orange' : 'red'}}'>{{$('Motor Scoring').item.json.viabilidad}}</b></td></tr>\n</table>\n<hr style='margin:20px 0'>\n<p style='color:#374151'><b>Recomendación IA:</b><br>{{JSON.parse($json.content[0].text).recomendacion}}</p>\n</div>\n</div>"
+          "Tipo cliente":        "={{ $('Normalizar datos externos').item.json.tipo_cliente }}",
+          "Nombre aliado":       "={{ $('Normalizar datos externos').item.json.nombre_aliado }}",
+          "Tipo documento":      "={{ $('Normalizar datos externos').item.json.tipo_documento }}",
+          "Número documento":    "={{ $('Normalizar datos externos').item.json.numero_documento }}",
+          "Nombre completo":     "={{ $('Normalizar datos externos').item.json.nombre_completo }}",
+          "Teléfono":            "={{ $('Normalizar datos externos').item.json.telefono }}",
+          "Email":               "={{ $('Normalizar datos externos').item.json.email }}",
+          "Perfil financiero":   "={{ $('Normalizar datos externos').item.json.perfil_financiero }}",
+          "Ingresos":            "={{ $('Normalizar datos externos').item.json.ingresos }}",
+          "Estado":              "nuevo",
+          "Fecha registro":      "={{ new Date().toISOString() }}",
+          "ID sistema":          "={{ $json.id }}"
+        },
+        "_nota": "Score crédito, reportes, documentación y evaluación se completan desde el sistema interno de Kreditton, NO desde JotForm."
       }
     },
     {
       "id": "7",
+      "name": "Notificar equipo Kreditton",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [1520, 200],
+      "parameters": {
+        "fromEmail": "sistema@kreditton.com",
+        "toEmail": "operaciones@kreditton.com",
+        "subject": "=[KREDITTON] Nuevo prospecto pendiente de evaluar: {{ $('Normalizar datos externos').item.json.nombre_completo }}",
+        "emailType": "html",
+        "message": "=<div style='font-family:sans-serif;max-width:600px'>\n<div style='background:#111;padding:20px;border-radius:8px 8px 0 0'>\n<h2 style='color:#F5C518;margin:0'>Kreditton — Nuevo prospecto</h2>\n<p style='color:#9ca3af;margin:4px 0 0'>Requiere preevaluación interna</p>\n</div>\n<div style='border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px'>\n<table width='100%' cellpadding='6'>\n<tr><td style='color:#6b7280;width:40%'>Nombre</td><td><b>{{ $('Normalizar datos externos').item.json.nombre_completo }}</b></td></tr>\n<tr><td style='color:#6b7280'>Documento</td><td>{{ $('Normalizar datos externos').item.json.tipo_documento }} {{ $('Normalizar datos externos').item.json.numero_documento }}</td></tr>\n<tr><td style='color:#6b7280'>Origen</td><td>{{ $('Normalizar datos externos').item.json.tipo_cliente }}{{ $('Normalizar datos externos').item.json.nombre_aliado ? ' — ' + $('Normalizar datos externos').item.json.nombre_aliado : '' }}</td></tr>\n<tr><td style='color:#6b7280'>Perfil</td><td>{{ $('Normalizar datos externos').item.json.perfil_financiero }}</td></tr>\n<tr><td style='color:#6b7280'>Ingresos</td><td>$ {{ Number($('Normalizar datos externos').item.json.ingresos).toLocaleString('es-CO') }}</td></tr>\n<tr><td style='color:#6b7280'>Contacto</td><td>{{ $('Normalizar datos externos').item.json.email }} | {{ $('Normalizar datos externos').item.json.telefono }}</td></tr>\n</table>\n<hr style='margin:20px 0'>\n<p style='background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;color:#92400e'>\n<b>Acción requerida:</b> Consultar score en Datacrédito/TransUnion, verificar reportes negativos y estado de documentación. Luego ejecutar la preevaluación desde el sistema interno.\n</p>\n<a href='http://localhost:5173/prospectos/{{ $json.id }}' style='display:inline-block;background:#111;color:#F5C518;font-weight:bold;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:8px'>Abrir expediente →</a>\n</div>\n</div>"
+      }
+    },
+    {
+      "id": "8",
       "name": "Respuesta webhook",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1560, 300],
+      "position": [1740, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={ \"status\": \"ok\", \"viabilidad\": \"{{$('Motor Scoring').item.json.viabilidad}}\", \"score\": {{$('Motor Scoring').item.json.score_interno}} }"
+        "responseBody": "={ \"status\": \"ok\", \"mensaje\": \"Prospecto registrado. Pendiente de preevaluación interna.\", \"prospecto_id\": {{ $('Registrar prospecto nuevo').item.json.id ?? 'duplicado' }} }"
       }
     }
   ],
   "connections": {
-    "Webhook JotForm":         { "main": [[{ "node": "Normalizar datos",          "type": "main", "index": 0 }]] },
-    "Normalizar datos":        { "main": [[{ "node": "Motor Scoring",             "type": "main", "index": 0 }]] },
-    "Motor Scoring":           { "main": [[{ "node": "Diagnóstico IA (Claude)",   "type": "main", "index": 0 }]] },
-    "Diagnóstico IA (Claude)": { "main": [[{ "node": "Escribir en Airtable",      "type": "main", "index": 0 }]] },
-    "Escribir en Airtable":    { "main": [[{ "node": "Notificar equipo Kreditton","type": "main", "index": 0 }]] },
-    "Notificar equipo Kreditton": { "main": [[{ "node": "Respuesta webhook",      "type": "main", "index": 0 }]] }
+    "Webhook JotForm":                { "main": [[{ "node": "Normalizar datos externos",       "type": "main", "index": 0 }]] },
+    "Normalizar datos externos":      { "main": [[{ "node": "Verificar duplicado",             "type": "main", "index": 0 }]] },
+    "Verificar duplicado":            { "main": [[{ "node": "¿Es duplicado?",                  "type": "main", "index": 0 }]] },
+    "¿Es duplicado?": {
+      "main": [
+        [{ "node": "Prospecto existente (ignorar o actualizar)", "type": "main", "index": 0 }],
+        [{ "node": "Registrar prospecto nuevo",                  "type": "main", "index": 0 }]
+      ]
+    },
+    "Registrar prospecto nuevo":      { "main": [[{ "node": "Registrar en Airtable",           "type": "main", "index": 0 }]] },
+    "Registrar en Airtable":          { "main": [[{ "node": "Notificar equipo Kreditton",       "type": "main", "index": 0 }]] },
+    "Notificar equipo Kreditton":     { "main": [[{ "node": "Respuesta webhook",               "type": "main", "index": 0 }]] },
+    "Prospecto existente (ignorar o actualizar)": { "main": [[{ "node": "Respuesta webhook",   "type": "main", "index": 0 }]] }
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
-import type { Prospecto, Stats, Viabilidad, TipoCliente, Estado } from '../types'
+import { Link, useNavigate } from 'react-router-dom'
+import type { Prospecto, Stats } from '../types'
 import { api } from '../api'
 import { StatsBar } from '../components/StatsBar'
 import { ViabilityBadge } from '../components/ViabilityBadge'
@@ -12,6 +12,7 @@ import { formatCOP, formatPct, formatDate } from '../lib/format'
 const REFRESH_MS = 30_000
 
 export function Dashboard() {
+  const navigate = useNavigate()
   const [prospectos, setProspectos] = useState<Prospecto[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -20,6 +21,8 @@ export function Dashboard() {
   const [filtroViabilidad, setFiltroViabilidad] = useState('')
   const [filtroCliente, setFiltroCliente] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroBuscar, setFiltroBuscar] = useState('')
+  const [filtroSinEvaluar, setFiltroSinEvaluar] = useState(false)
 
   const cargar = useCallback(async () => {
     try {
@@ -28,18 +31,20 @@ export function Dashboard() {
           viabilidad: filtroViabilidad || undefined,
           tipo_cliente: filtroCliente || undefined,
           estado: filtroEstado || undefined,
+          buscar: filtroBuscar || undefined,
+          sin_evaluar: filtroSinEvaluar ? 'true' : undefined,
         }),
         api.stats(),
       ])
       setProspectos(lista)
       setStats(st)
       setError(null)
-    } catch (e) {
+    } catch {
       setError('No se pudo conectar con el servidor. Verifique que el backend esté corriendo.')
     } finally {
       setLoading(false)
     }
-  }, [filtroViabilidad, filtroCliente, filtroEstado])
+  }, [filtroViabilidad, filtroCliente, filtroEstado, filtroBuscar, filtroSinEvaluar])
 
   useEffect(() => {
     cargar()
@@ -52,7 +57,8 @@ export function Dashboard() {
     setSelected(updated)
   }
 
-  const ltvColor = (ltv: number) =>
+  const ltvColor = (ltv: number | null) =>
+    !ltv ? 'text-gray-400' :
     ltv <= 0.80 ? 'text-green-600' : ltv <= 0.90 ? 'text-yellow-600' : 'text-red-600'
 
   return (
@@ -79,52 +85,77 @@ export function Dashboard() {
         {stats && <StatsBar stats={stats} />}
 
         {/* Filtros */}
-        <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Filtros:</span>
+        <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Viabilidad:</span>
+            <FilterGroup
+              value={filtroViabilidad}
+              onChange={v => { setFiltroViabilidad(v); setFiltroSinEvaluar(false) }}
+              options={[
+                { label: 'Todas', value: '' },
+                { label: 'Alta', value: 'Alta' },
+                { label: 'Media', value: 'Media' },
+                { label: 'Baja', value: 'Baja' },
+              ]}
+            />
+            <button
+              onClick={() => { setFiltroSinEvaluar(p => !p); setFiltroViabilidad('') }}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors font-medium ${
+                filtroSinEvaluar ? 'bg-brand-dark text-white border-brand-dark' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              Sin evaluar{stats?.sin_evaluar ? ` (${stats.sin_evaluar})` : ''}
+            </button>
 
-          <FilterGroup
-            value={filtroViabilidad}
-            onChange={setFiltroViabilidad}
-            options={[
-              { label: 'Todas', value: '' },
-              { label: 'Alta', value: 'Alta' },
-              { label: 'Media', value: 'Media' },
-              { label: 'Baja', value: 'Baja' },
-            ]}
-          />
+            <div className="w-px h-4 bg-gray-200" />
 
-          <div className="w-px h-4 bg-gray-200" />
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Tipo:</span>
+            <FilterGroup
+              value={filtroCliente}
+              onChange={setFiltroCliente}
+              options={[
+                { label: 'B2B+B2C', value: '' },
+                { label: 'B2B', value: 'B2B' },
+                { label: 'B2C', value: 'B2C' },
+              ]}
+            />
 
-          <FilterGroup
-            value={filtroCliente}
-            onChange={setFiltroCliente}
-            options={[
-              { label: 'B2B + B2C', value: '' },
-              { label: 'B2B', value: 'B2B' },
-              { label: 'B2C', value: 'B2C' },
-            ]}
-          />
+            <div className="w-px h-4 bg-gray-200" />
 
-          <div className="w-px h-4 bg-gray-200" />
+            <select
+              value={filtroEstado}
+              onChange={e => setFiltroEstado(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+            >
+              <option value="">Todos los estados</option>
+              <option value="nuevo">Nuevo</option>
+              <option value="en_revision">En revisión</option>
+              <option value="asignado">Asignado</option>
+              <option value="cerrado">Cerrado</option>
+            </select>
 
-          <select
-            value={filtroEstado}
-            onChange={e => setFiltroEstado(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-yellow"
-          >
-            <option value="">Todos los estados</option>
-            <option value="nuevo">Nuevo</option>
-            <option value="en_revision">En revisión</option>
-            <option value="asignado">Asignado</option>
-            <option value="cerrado">Cerrado</option>
-          </select>
+            <button
+              onClick={() => cargar()}
+              className="ml-auto text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            >
+              ↻ Actualizar
+            </button>
+          </div>
 
-          <button
-            onClick={() => cargar()}
-            className="ml-auto text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
-          >
-            ↻ Actualizar
-          </button>
+          {/* Búsqueda por nombre o documento */}
+          <div className="relative">
+            <input
+              type="text"
+              value={filtroBuscar}
+              onChange={e => setFiltroBuscar(e.target.value)}
+              placeholder="Buscar por nombre o número de documento…"
+              className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+            />
+            <span className="absolute left-3 top-2.5 text-gray-400 text-xs">🔍</span>
+            {filtroBuscar && (
+              <button onClick={() => setFiltroBuscar('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-700 text-xs">✕</button>
+            )}
+          </div>
         </div>
 
         {/* Tabla */}
@@ -135,10 +166,8 @@ export function Dashboard() {
             <div className="py-16 text-center text-red-500 text-sm">{error}</div>
           ) : prospectos.length === 0 ? (
             <div className="py-16 text-center text-gray-400 text-sm">
-              No hay prospectos registrados aún.{' '}
-              <Link to="/nuevo" className="text-brand-yellow font-medium hover:underline">
-                Registrar el primero →
-              </Link>
+              No hay prospectos que coincidan con los filtros.{' '}
+              <Link to="/nuevo" className="text-brand-yellow font-medium hover:underline">Registrar nuevo →</Link>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -175,29 +204,38 @@ export function Dashboard() {
                         {p.nombre_aliado && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-24">{p.nombre_aliado}</div>}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatCOP(p.ingresos)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{formatCOP(p.monto_solicitado)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {p.monto_solicitado ? formatCOP(p.monto_solicitado) : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className={`px-4 py-3 text-right font-semibold tabular-nums ${ltvColor(p.ltv)}`}>
-                        {formatPct(p.ltv)}
+                        {p.ltv ? formatPct(p.ltv) : <span className="text-gray-300 font-normal">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <ScoreGauge score={p.score_interno} />
+                        {p.score_interno !== null ? <ScoreGauge score={p.score_interno} /> : <span className="text-xs text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <ViabilityBadge viabilidad={p.viabilidad} />
+                        {p.viabilidad
+                          ? <ViabilityBadge viabilidad={p.viabilidad} />
+                          : <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Sin evaluar</span>
+                        }
                       </td>
+                      <td className="px-4 py-3"><StateBadge estado={p.estado} /></td>
+                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{formatDate(p.fecha_registro)}</td>
                       <td className="px-4 py-3">
-                        <StateBadge estado={p.estado} />
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
-                        {formatDate(p.fecha_registro)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={e => { e.stopPropagation(); setSelected(p) }}
-                          className="text-xs text-brand-yellow font-semibold hover:underline"
-                        >
-                          Ver →
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={e => { e.stopPropagation(); setSelected(p) }}
+                            className="text-xs text-brand-yellow font-semibold hover:underline whitespace-nowrap"
+                          >
+                            Ver
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); navigate(`/prospectos/${p.id}`) }}
+                            className="text-xs text-gray-500 hover:text-gray-800 font-medium hover:underline whitespace-nowrap"
+                          >
+                            Expediente →
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -208,7 +246,7 @@ export function Dashboard() {
         </div>
 
         <p className="text-xs text-gray-400 text-center">
-          Actualización automática cada 30 segundos · {prospectos.length} prospecto{prospectos.length !== 1 ? 's' : ''} mostrado{prospectos.length !== 1 ? 's' : ''}
+          Actualización automática cada 30 s · {prospectos.length} prospecto{prospectos.length !== 1 ? 's' : ''} mostrado{prospectos.length !== 1 ? 's' : ''}
         </p>
       </main>
 
@@ -235,9 +273,7 @@ function FilterGroup({ value, onChange, options }: {
           key={opt.value}
           onClick={() => onChange(opt.value)}
           className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-            value === opt.value
-              ? 'bg-brand-dark text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50'
+            value === opt.value ? 'bg-brand-dark text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
           }`}
         >
           {opt.label}

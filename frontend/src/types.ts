@@ -9,17 +9,14 @@ export interface DetalleScore {
   observacion: string
 }
 
-export interface Prospecto {
+// Evaluación individual (un cálculo de viabilidad en un momento dado)
+export interface Evaluacion {
   id: number
-  fecha_registro: string
-  tipo_cliente: TipoCliente
-  nombre_aliado: string | null
-  tipo_documento: string
-  numero_documento: string
-  nombre_completo: string
-  telefono: string
-  email: string
-  perfil_financiero: string
+  prospecto_id: number
+  fecha_evaluacion: string
+  numero_evaluacion: number
+  motivo_recalculo: string | null
+  // Inputs snapshot
   ingresos: number
   score_credito: number
   reportes_negativos: boolean
@@ -30,7 +27,7 @@ export interface Prospecto {
   plazo_meses: number
   documentacion: string
   observaciones: string | null
-  // Calculados
+  // Resultados calculados
   tasa_mv: number
   cuota_sin_seguro: number
   seguro_vida: number
@@ -47,20 +44,65 @@ export interface Prospecto {
   // IA
   diagnostico_ia: string | null
   recomendacion_asesor: string | null
-  // Gestión
+}
+
+// Prospecto (JOIN plano con evaluación activa para compatibilidad con lista/modal)
+export interface Prospecto {
+  id: number
+  fecha_registro: string
+  tipo_cliente: TipoCliente
+  nombre_aliado: string | null
+  tipo_documento: string
+  numero_documento: string
+  nombre_completo: string
+  telefono: string
+  email: string
+  perfil_financiero: string
+  ingresos: number
   estado: Estado
   asesor_asignado: string | null
   notas_internas: string | null
+  evaluacion_activa_id: number | null
+  // De la evaluación activa (null si aún no ha sido evaluado)
+  eval_id: number | null
+  numero_evaluacion: number | null
+  fecha_evaluacion: string | null
+  motivo_recalculo: string | null
+  score_credito: number | null
+  reportes_negativos: boolean
+  valor_inmueble: number | null
+  monto_solicitado: number | null
+  tipo_inmueble: string | null
+  subtipo_inmueble: string | null
+  plazo_meses: number | null
+  documentacion: string | null
+  observaciones: string | null
+  tasa_mv: number | null
+  cuota_sin_seguro: number | null
+  seguro_vida: number | null
+  seguro_incendio: number | null
+  cuota_total: number | null
+  cuota_maxima: number | null
+  ltv: number | null
+  ingreso_minimo_requerido: number | null
+  score_interno: number | null
+  detalle_score: DetalleScore[]
+  viabilidad: Viabilidad | null
+  factores_clasificacion: string[]
+  diagnostico_ia: string | null
+  recomendacion_asesor: string | null
 }
 
 export interface Stats {
   total: number
+  sin_evaluar: number
   por_viabilidad: { Alta: number; Media: number; Baja: number }
   por_estado: Record<string, number>
   por_tipo_cliente: { B2B: number; B2C: number }
 }
 
-export interface ProspectoInput {
+// Datos del formulario externo (cliente/aliado)
+export interface FormularioExterno {
   tipo_cliente: TipoCliente
   nombre_aliado?: string
   tipo_documento: string
@@ -69,6 +111,11 @@ export interface ProspectoInput {
   telefono: string
   email: string
   perfil_financiero: string
+  ingresos: number
+}
+
+// Datos de evaluación (Kreditton interno)
+export interface FormularioEvaluacion {
   ingresos: number
   score_credito: number
   reportes_negativos: boolean
@@ -79,4 +126,8 @@ export interface ProspectoInput {
   plazo_meses: number
   documentacion: string
   observaciones?: string
+  motivo_recalculo?: string
 }
+
+// Mantener retrocompatibilidad (alias)
+export type ProspectoInput = FormularioExterno
