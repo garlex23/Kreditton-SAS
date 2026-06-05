@@ -128,7 +128,7 @@ export function Dashboard() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-yellow"
             >
               <option value="">Todos los estados</option>
-              <option value="nuevo">Nuevo</option>
+              <option value="pendiente_validacion">Pendiente de validación</option>
               <option value="en_revision">En revisión</option>
               <option value="asignado">Asignado</option>
               <option value="cerrado">Cerrado</option>

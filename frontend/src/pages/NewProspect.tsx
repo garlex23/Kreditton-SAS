@@ -12,8 +12,25 @@ const INITIAL: FormularioExterno = {
   telefono: '',
   email: '',
   perfil_financiero: 'empleado',
+  empresa_actual: '',
   ingresos: 0,
+  otros_ingresos: 0,
+  obligaciones_mensuales: 0,
+  valor_inmueble: 0,
+  monto_solicitado: 0,
+  cuota_inicial_disponible: 0,
+  tipo_inmueble: 'nuevo',
+  subtipo_inmueble: 'apartamento',
+  plazo_meses: 180,
+  documentos_adjuntos: [],
 }
+
+const TIPOS_DOC = [
+  { label: 'Cédula de ciudadanía', value: 'cedula_ciudadania' },
+  { label: 'Certificado ingresos (últimos 3 meses)', value: 'certificado_ingresos' },
+  { label: 'Extractos bancarios (últimos 3 meses)', value: 'extractos_bancarios' },
+  { label: 'Compromiso de compraventa', value: 'compromiso_compraventa' },
+]
 
 export function NewProspect() {
   const navigate = useNavigate()
@@ -25,6 +42,18 @@ export function NewProspect() {
 
   function set(field: keyof FormularioExterno, value: unknown) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  function toggleDoc(value: string) {
+    setForm(prev => {
+      const docs = prev.documentos_adjuntos || []
+      return {
+        ...prev,
+        documentos_adjuntos: docs.includes(value)
+          ? docs.filter(d => d !== value)
+          : [...docs, value],
+      }
+    })
   }
 
   // Verificar duplicado en tiempo real mientras se escribe el documento
@@ -46,7 +75,16 @@ export function NewProspect() {
     setSubmitting(true)
     setError(null)
     try {
-      const payload: FormularioExterno = { ...form, ingresos: Number(form.ingresos) }
+      const payload: FormularioExterno = {
+        ...form,
+        ingresos: Number(form.ingresos),
+        otros_ingresos: Number(form.otros_ingresos || 0),
+        obligaciones_mensuales: Number(form.obligaciones_mensuales || 0),
+        valor_inmueble: Number(form.valor_inmueble || 0) || undefined,
+        monto_solicitado: Number(form.monto_solicitado || 0) || undefined,
+        cuota_inicial_disponible: Number(form.cuota_inicial_disponible || 0) || undefined,
+        plazo_meses: Number(form.plazo_meses) || undefined,
+      }
       const creado = await api.crearProspecto(payload)
       navigate(`/prospectos/${creado.id}`, { state: { nuevo: true } })
     } catch (err: unknown) {
@@ -76,7 +114,7 @@ export function NewProspect() {
 
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
           <strong>Formulario externo:</strong> capture los datos que el cliente o aliado conoce.
-          El score crediticio, reportes y documentación se completan internamente desde el expediente.
+          El score crediticio, reportes negativos y estado de documentación se verifican internamente desde el expediente.
         </div>
 
         {/* 1. Origen */}
@@ -142,8 +180,8 @@ export function NewProspect() {
           </div>
         </Card>
 
-        {/* 3. Perfil financiero */}
-        <Card title="3. Perfil financiero">
+        {/* 3. Perfil laboral y financiero */}
+        <Card title="3. Perfil laboral y financiero">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label required>Perfil laboral</Label>
@@ -154,7 +192,11 @@ export function NewProspect() {
               </select>
             </div>
             <div>
-              <Label required>Ingresos mensuales (COP)</Label>
+              <Label>Empresa / empleador actual</Label>
+              <input value={form.empresa_actual} onChange={e => set('empresa_actual', e.target.value)} className={INPUT} placeholder="Nombre de la empresa" />
+            </div>
+            <div>
+              <Label required>Ingresos mensuales principales (COP)</Label>
               <input
                 type="number" min="0" step="100000"
                 value={form.ingresos || ''}
@@ -163,9 +205,113 @@ export function NewProspect() {
                 placeholder="8000000"
                 required
               />
-              <p className="text-xs text-gray-400 mt-1">Ingresos netos declarados por el solicitante</p>
+              <p className="text-xs text-gray-400 mt-1">Salario neto o ingresos declarados</p>
+            </div>
+            <div>
+              <Label>Otros ingresos mensuales (COP)</Label>
+              <input
+                type="number" min="0" step="100000"
+                value={form.otros_ingresos || ''}
+                onChange={e => set('otros_ingresos', Number(e.target.value))}
+                className={INPUT}
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-400 mt-1">Arriendos, honorarios, pensiones, etc.</p>
+            </div>
+            <div>
+              <Label>Obligaciones financieras mensuales (COP)</Label>
+              <input
+                type="number" min="0" step="100000"
+                value={form.obligaciones_mensuales || ''}
+                onChange={e => set('obligaciones_mensuales', Number(e.target.value))}
+                className={INPUT}
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-400 mt-1">Cuotas de créditos, tarjetas, vehículo, etc.</p>
             </div>
           </div>
+        </Card>
+
+        {/* 4. Datos del inmueble y crédito */}
+        <Card title="4. Inmueble y crédito solicitado">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Valor del inmueble (COP)</Label>
+              <input
+                type="number" min="0" step="1000000"
+                value={form.valor_inmueble || ''}
+                onChange={e => set('valor_inmueble', Number(e.target.value))}
+                className={INPUT}
+                placeholder="400000000"
+              />
+            </div>
+            <div>
+              <Label>Monto de crédito solicitado (COP)</Label>
+              <input
+                type="number" min="0" step="1000000"
+                value={form.monto_solicitado || ''}
+                onChange={e => set('monto_solicitado', Number(e.target.value))}
+                className={INPUT}
+                placeholder="280000000"
+              />
+            </div>
+            <div>
+              <Label>Cuota inicial disponible (COP)</Label>
+              <input
+                type="number" min="0" step="1000000"
+                value={form.cuota_inicial_disponible || ''}
+                onChange={e => set('cuota_inicial_disponible', Number(e.target.value))}
+                className={INPUT}
+                placeholder="120000000"
+              />
+            </div>
+            <div>
+              <Label>Tipo de inmueble</Label>
+              <select value={form.tipo_inmueble} onChange={e => set('tipo_inmueble', e.target.value)} className={SELECT}>
+                <option value="nuevo">Nuevo</option>
+                <option value="usado">Usado</option>
+              </select>
+            </div>
+            <div>
+              <Label>Subtipo de inmueble</Label>
+              <select value={form.subtipo_inmueble} onChange={e => set('subtipo_inmueble', e.target.value)} className={SELECT}>
+                <option value="apartamento">Apartamento</option>
+                <option value="casa">Casa</option>
+              </select>
+            </div>
+            <div>
+              <Label>Plazo deseado</Label>
+              <select value={form.plazo_meses} onChange={e => set('plazo_meses', Number(e.target.value))} className={SELECT}>
+                <option value={60}>5 años (60 meses)</option>
+                <option value={120}>10 años (120 meses)</option>
+                <option value={180}>15 años (180 meses)</option>
+                <option value={240}>20 años (240 meses)</option>
+              </select>
+            </div>
+          </div>
+        </Card>
+
+        {/* 5. Documentos adjuntos */}
+        <Card title="5. Documentación disponible">
+          <p className="text-xs text-gray-500 mb-3">Indique qué documentos tiene disponibles para entregar:</p>
+          <div className="space-y-2">
+            {TIPOS_DOC.map(doc => (
+              <label key={doc.value} className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={(form.documentos_adjuntos || []).includes(doc.value)}
+                  onChange={() => toggleDoc(doc.value)}
+                  className="w-4 h-4 accent-brand-yellow"
+                />
+                <span className="text-sm text-gray-700 group-hover:text-gray-900">{doc.label}</span>
+              </label>
+            ))}
+          </div>
+          {(form.documentos_adjuntos || []).length > 0 && (
+            <p className="text-xs text-green-600 mt-3 font-medium">
+              ✓ {form.documentos_adjuntos!.length} documento{form.documentos_adjuntos!.length !== 1 ? 's' : ''} indicado{form.documentos_adjuntos!.length !== 1 ? 's' : ''}
+            </p>
+          )}
         </Card>
 
         {error && (

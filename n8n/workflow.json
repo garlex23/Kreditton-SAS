@@ -1,10 +1,10 @@
 {
-  "name": "Kreditton — Preevaluación Hipotecaria v2",
-  "_descripcion": "Arquitectura v2: JotForm captura solo datos externos. Kreditton completa score, reportes y documentación internamente antes de evaluar.",
+  "name": "Kreditton — Preevaluación Hipotecaria v3",
+  "_descripcion": "Arquitectura v3: Tally captura todos los datos del cliente. Kreditton completa score, reportes y estado documental internamente antes de ejecutar la preevaluación.",
   "nodes": [
     {
       "id": "1",
-      "name": "Webhook JotForm",
+      "name": "Webhook Tally",
       "type": "n8n-nodes-base.webhook",
       "position": [200, 300],
       "parameters": {
@@ -12,27 +12,37 @@
         "httpMethod": "POST",
         "responseMode": "responseNode"
       },
-      "_nota": "JotForm envía SOLO datos externos del cliente/aliado. Score, reportes y documentación los completa Kreditton internamente."
+      "_nota": "Tally envía los datos del cliente/aliado. Score crediticio, reportes negativos y estado documental los verifica Kreditton internamente."
     },
     {
       "id": "2",
-      "name": "Normalizar datos externos",
+      "name": "Normalizar datos Tally",
       "type": "n8n-nodes-base.set",
       "position": [420, 300],
       "parameters": {
         "values": {
           "string": [
-            { "name": "tipo_cliente",      "value": "={{ $json.body.q3_tipoDeCliente ?? 'B2C' }}" },
-            { "name": "nombre_aliado",     "value": "={{ $json.body.q4_nombreAliado ?? '' }}" },
-            { "name": "tipo_documento",    "value": "={{ $json.body.q5_tipoDocumento }}" },
-            { "name": "numero_documento",  "value": "={{ $json.body.q6_numeroDocumento }}" },
-            { "name": "nombre_completo",   "value": "={{ $json.body.q7_nombreCompleto }}" },
-            { "name": "telefono",          "value": "={{ $json.body.q8_telefono }}" },
-            { "name": "email",             "value": "={{ $json.body.q9_email }}" },
-            { "name": "perfil_financiero", "value": "={{ $json.body.q10_perfilFinanciero }}" }
+            { "name": "tipo_cliente",         "value": "={{ $json.data.fields.tipo_cliente ?? 'B2C' }}" },
+            { "name": "nombre_aliado",        "value": "={{ $json.data.fields.nombre_aliado ?? '' }}" },
+            { "name": "tipo_documento",       "value": "={{ $json.data.fields.tipo_documento }}" },
+            { "name": "numero_documento",     "value": "={{ $json.data.fields.numero_documento }}" },
+            { "name": "nombre_completo",      "value": "={{ $json.data.fields.nombre_completo }}" },
+            { "name": "telefono",             "value": "={{ $json.data.fields.telefono }}" },
+            { "name": "email",                "value": "={{ $json.data.fields.email }}" },
+            { "name": "perfil_financiero",    "value": "={{ $json.data.fields.perfil_financiero }}" },
+            { "name": "empresa_actual",       "value": "={{ $json.data.fields.empresa_actual ?? '' }}" },
+            { "name": "tipo_inmueble",        "value": "={{ $json.data.fields.tipo_inmueble ?? 'nuevo' }}" },
+            { "name": "subtipo_inmueble",     "value": "={{ $json.data.fields.subtipo_inmueble ?? 'apartamento' }}" },
+            { "name": "documentos_adjuntos",  "value": "={{ JSON.stringify($json.data.fields.documentos_adjuntos ?? []) }}" }
           ],
           "number": [
-            { "name": "ingresos", "value": "={{ Number($json.body.q11_ingresos) }}" }
+            { "name": "ingresos",                 "value": "={{ Number($json.data.fields.ingresos) }}" },
+            { "name": "otros_ingresos",           "value": "={{ Number($json.data.fields.otros_ingresos ?? 0) }}" },
+            { "name": "obligaciones_mensuales",   "value": "={{ Number($json.data.fields.obligaciones_mensuales ?? 0) }}" },
+            { "name": "valor_inmueble",           "value": "={{ Number($json.data.fields.valor_inmueble ?? 0) }}" },
+            { "name": "monto_solicitado",         "value": "={{ Number($json.data.fields.monto_solicitado ?? 0) }}" },
+            { "name": "cuota_inicial_disponible", "value": "={{ Number($json.data.fields.cuota_inicial_disponible ?? 0) }}" },
+            { "name": "plazo_meses",              "value": "={{ Number($json.data.fields.plazo_meses ?? 180) }}" }
           ]
         }
       }
@@ -76,7 +86,7 @@
         "body": {
           "contentType": "json",
           "jsonParameters": true,
-          "bodyParametersJson": "={{ JSON.stringify({ tipo_cliente: $('Normalizar datos externos').item.json.tipo_cliente, nombre_aliado: $('Normalizar datos externos').item.json.nombre_aliado, tipo_documento: $('Normalizar datos externos').item.json.tipo_documento, numero_documento: $('Normalizar datos externos').item.json.numero_documento, nombre_completo: $('Normalizar datos externos').item.json.nombre_completo, telefono: $('Normalizar datos externos').item.json.telefono, email: $('Normalizar datos externos').item.json.email, perfil_financiero: $('Normalizar datos externos').item.json.perfil_financiero, ingresos: $('Normalizar datos externos').item.json.ingresos }) }}"
+          "bodyParametersJson": "={{ JSON.stringify({ tipo_cliente: $('Normalizar datos Tally').item.json.tipo_cliente, nombre_aliado: $('Normalizar datos Tally').item.json.nombre_aliado || null, tipo_documento: $('Normalizar datos Tally').item.json.tipo_documento, numero_documento: $('Normalizar datos Tally').item.json.numero_documento, nombre_completo: $('Normalizar datos Tally').item.json.nombre_completo, telefono: $('Normalizar datos Tally').item.json.telefono, email: $('Normalizar datos Tally').item.json.email, perfil_financiero: $('Normalizar datos Tally').item.json.perfil_financiero, empresa_actual: $('Normalizar datos Tally').item.json.empresa_actual || null, ingresos: $('Normalizar datos Tally').item.json.ingresos, otros_ingresos: $('Normalizar datos Tally').item.json.otros_ingresos, obligaciones_mensuales: $('Normalizar datos Tally').item.json.obligaciones_mensuales, valor_inmueble: $('Normalizar datos Tally').item.json.valor_inmueble || null, monto_solicitado: $('Normalizar datos Tally').item.json.monto_solicitado || null, cuota_inicial_disponible: $('Normalizar datos Tally').item.json.cuota_inicial_disponible || null, tipo_inmueble: $('Normalizar datos Tally').item.json.tipo_inmueble, subtipo_inmueble: $('Normalizar datos Tally').item.json.subtipo_inmueble, plazo_meses: $('Normalizar datos Tally').item.json.plazo_meses, documentos_adjuntos: JSON.parse($('Normalizar datos Tally').item.json.documentos_adjuntos) }) }}"
         }
       }
     },
@@ -97,20 +107,30 @@
         "application": "YOUR_AIRTABLE_BASE_ID",
         "table": "Prospectos",
         "fields": {
-          "Tipo cliente":        "={{ $('Normalizar datos externos').item.json.tipo_cliente }}",
-          "Nombre aliado":       "={{ $('Normalizar datos externos').item.json.nombre_aliado }}",
-          "Tipo documento":      "={{ $('Normalizar datos externos').item.json.tipo_documento }}",
-          "Número documento":    "={{ $('Normalizar datos externos').item.json.numero_documento }}",
-          "Nombre completo":     "={{ $('Normalizar datos externos').item.json.nombre_completo }}",
-          "Teléfono":            "={{ $('Normalizar datos externos').item.json.telefono }}",
-          "Email":               "={{ $('Normalizar datos externos').item.json.email }}",
-          "Perfil financiero":   "={{ $('Normalizar datos externos').item.json.perfil_financiero }}",
-          "Ingresos":            "={{ $('Normalizar datos externos').item.json.ingresos }}",
-          "Estado":              "nuevo",
-          "Fecha registro":      "={{ new Date().toISOString() }}",
-          "ID sistema":          "={{ $json.id }}"
+          "Tipo cliente":             "={{ $('Normalizar datos Tally').item.json.tipo_cliente }}",
+          "Nombre aliado":            "={{ $('Normalizar datos Tally').item.json.nombre_aliado }}",
+          "Tipo documento":           "={{ $('Normalizar datos Tally').item.json.tipo_documento }}",
+          "Número documento":         "={{ $('Normalizar datos Tally').item.json.numero_documento }}",
+          "Nombre completo":          "={{ $('Normalizar datos Tally').item.json.nombre_completo }}",
+          "Teléfono":                 "={{ $('Normalizar datos Tally').item.json.telefono }}",
+          "Email":                    "={{ $('Normalizar datos Tally').item.json.email }}",
+          "Perfil financiero":        "={{ $('Normalizar datos Tally').item.json.perfil_financiero }}",
+          "Empresa actual":           "={{ $('Normalizar datos Tally').item.json.empresa_actual }}",
+          "Ingresos":                 "={{ $('Normalizar datos Tally').item.json.ingresos }}",
+          "Otros ingresos":           "={{ $('Normalizar datos Tally').item.json.otros_ingresos }}",
+          "Obligaciones mensuales":   "={{ $('Normalizar datos Tally').item.json.obligaciones_mensuales }}",
+          "Valor inmueble":           "={{ $('Normalizar datos Tally').item.json.valor_inmueble }}",
+          "Monto solicitado":         "={{ $('Normalizar datos Tally').item.json.monto_solicitado }}",
+          "Cuota inicial":            "={{ $('Normalizar datos Tally').item.json.cuota_inicial_disponible }}",
+          "Tipo inmueble":            "={{ $('Normalizar datos Tally').item.json.tipo_inmueble }}",
+          "Subtipo inmueble":         "={{ $('Normalizar datos Tally').item.json.subtipo_inmueble }}",
+          "Plazo meses":              "={{ $('Normalizar datos Tally').item.json.plazo_meses }}",
+          "Documentos adjuntos":      "={{ $('Normalizar datos Tally').item.json.documentos_adjuntos }}",
+          "Estado":                   "Pendiente de validación",
+          "Fecha registro":           "={{ new Date().toISOString() }}",
+          "ID sistema":               "={{ $json.id }}"
         },
-        "_nota": "Score crédito, reportes, documentación y evaluación se completan desde el sistema interno de Kreditton, NO desde JotForm."
+        "_nota": "Score crédito, reportes negativos y estado documental se completan desde el sistema interno de Kreditton."
       }
     },
     {
@@ -121,9 +141,9 @@
       "parameters": {
         "fromEmail": "sistema@kreditton.com",
         "toEmail": "operaciones@kreditton.com",
-        "subject": "=[KREDITTON] Nuevo prospecto pendiente de evaluar: {{ $('Normalizar datos externos').item.json.nombre_completo }}",
+        "subject": "=[KREDITTON] Nuevo prospecto pendiente de validar: {{ $('Normalizar datos Tally').item.json.nombre_completo }}",
         "emailType": "html",
-        "message": "=<div style='font-family:sans-serif;max-width:600px'>\n<div style='background:#111;padding:20px;border-radius:8px 8px 0 0'>\n<h2 style='color:#F5C518;margin:0'>Kreditton — Nuevo prospecto</h2>\n<p style='color:#9ca3af;margin:4px 0 0'>Requiere preevaluación interna</p>\n</div>\n<div style='border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px'>\n<table width='100%' cellpadding='6'>\n<tr><td style='color:#6b7280;width:40%'>Nombre</td><td><b>{{ $('Normalizar datos externos').item.json.nombre_completo }}</b></td></tr>\n<tr><td style='color:#6b7280'>Documento</td><td>{{ $('Normalizar datos externos').item.json.tipo_documento }} {{ $('Normalizar datos externos').item.json.numero_documento }}</td></tr>\n<tr><td style='color:#6b7280'>Origen</td><td>{{ $('Normalizar datos externos').item.json.tipo_cliente }}{{ $('Normalizar datos externos').item.json.nombre_aliado ? ' — ' + $('Normalizar datos externos').item.json.nombre_aliado : '' }}</td></tr>\n<tr><td style='color:#6b7280'>Perfil</td><td>{{ $('Normalizar datos externos').item.json.perfil_financiero }}</td></tr>\n<tr><td style='color:#6b7280'>Ingresos</td><td>$ {{ Number($('Normalizar datos externos').item.json.ingresos).toLocaleString('es-CO') }}</td></tr>\n<tr><td style='color:#6b7280'>Contacto</td><td>{{ $('Normalizar datos externos').item.json.email }} | {{ $('Normalizar datos externos').item.json.telefono }}</td></tr>\n</table>\n<hr style='margin:20px 0'>\n<p style='background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;color:#92400e'>\n<b>Acción requerida:</b> Consultar score en Datacrédito/TransUnion, verificar reportes negativos y estado de documentación. Luego ejecutar la preevaluación desde el sistema interno.\n</p>\n<a href='http://localhost:5173/prospectos/{{ $json.id }}' style='display:inline-block;background:#111;color:#F5C518;font-weight:bold;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:8px'>Abrir expediente →</a>\n</div>\n</div>"
+        "message": "=<div style='font-family:sans-serif;max-width:600px'>\n<div style='background:#111;padding:20px;border-radius:8px 8px 0 0'>\n<h2 style='color:#F5C518;margin:0'>Kreditton — Nuevo prospecto</h2>\n<p style='color:#9ca3af;margin:4px 0 0'>Estado: Pendiente de validación interna</p>\n</div>\n<div style='border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px'>\n<table width='100%' cellpadding='6'>\n<tr><td style='color:#6b7280;width:40%'>Nombre</td><td><b>{{ $('Normalizar datos Tally').item.json.nombre_completo }}</b></td></tr>\n<tr><td style='color:#6b7280'>Documento</td><td>{{ $('Normalizar datos Tally').item.json.tipo_documento }} {{ $('Normalizar datos Tally').item.json.numero_documento }}</td></tr>\n<tr><td style='color:#6b7280'>Origen</td><td>{{ $('Normalizar datos Tally').item.json.tipo_cliente }}{{ $('Normalizar datos Tally').item.json.nombre_aliado ? ' — ' + $('Normalizar datos Tally').item.json.nombre_aliado : '' }}</td></tr>\n<tr><td style='color:#6b7280'>Perfil</td><td>{{ $('Normalizar datos Tally').item.json.perfil_financiero }}{{ $('Normalizar datos Tally').item.json.empresa_actual ? ' · ' + $('Normalizar datos Tally').item.json.empresa_actual : '' }}</td></tr>\n<tr><td style='color:#6b7280'>Ingresos principales</td><td>$ {{ Number($('Normalizar datos Tally').item.json.ingresos).toLocaleString('es-CO') }}</td></tr>\n<tr><td style='color:#6b7280'>Otros ingresos</td><td>$ {{ Number($('Normalizar datos Tally').item.json.otros_ingresos).toLocaleString('es-CO') }}</td></tr>\n<tr><td style='color:#6b7280'>Obligaciones</td><td>$ {{ Number($('Normalizar datos Tally').item.json.obligaciones_mensuales).toLocaleString('es-CO') }}</td></tr>\n<tr><td style='color:#6b7280'>Inmueble</td><td>{{ $('Normalizar datos Tally').item.json.tipo_inmueble }} · {{ $('Normalizar datos Tally').item.json.subtipo_inmueble }}</td></tr>\n<tr><td style='color:#6b7280'>Valor inmueble</td><td>$ {{ Number($('Normalizar datos Tally').item.json.valor_inmueble).toLocaleString('es-CO') }}</td></tr>\n<tr><td style='color:#6b7280'>Monto solicitado</td><td>$ {{ Number($('Normalizar datos Tally').item.json.monto_solicitado).toLocaleString('es-CO') }}</td></tr>\n<tr><td style='color:#6b7280'>Contacto</td><td>{{ $('Normalizar datos Tally').item.json.email }} | {{ $('Normalizar datos Tally').item.json.telefono }}</td></tr>\n</table>\n<hr style='margin:20px 0'>\n<p style='background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;color:#92400e'>\n<b>Acción requerida:</b> Consultar score en Datacrédito/TransUnion, verificar reportes negativos y estado de documentación. Luego ejecutar la preevaluación desde el sistema interno.\n</p>\n<a href='http://localhost:5173/prospectos/{{ $json.id }}' style='display:inline-block;background:#111;color:#F5C518;font-weight:bold;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:8px'>Abrir expediente →</a>\n</div>\n</div>"
       }
     },
     {
@@ -133,23 +153,23 @@
       "position": [1740, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={ \"status\": \"ok\", \"mensaje\": \"Prospecto registrado. Pendiente de preevaluación interna.\", \"prospecto_id\": {{ $('Registrar prospecto nuevo').item.json.id ?? 'duplicado' }} }"
+        "responseBody": "={ \"status\": \"ok\", \"mensaje\": \"Prospecto registrado. Estado: Pendiente de validación interna.\", \"prospecto_id\": {{ $('Registrar prospecto nuevo').item.json.id ?? 'duplicado' }} }"
       }
     }
   ],
   "connections": {
-    "Webhook JotForm":                { "main": [[{ "node": "Normalizar datos externos",       "type": "main", "index": 0 }]] },
-    "Normalizar datos externos":      { "main": [[{ "node": "Verificar duplicado",             "type": "main", "index": 0 }]] },
-    "Verificar duplicado":            { "main": [[{ "node": "¿Es duplicado?",                  "type": "main", "index": 0 }]] },
+    "Webhook Tally":                  { "main": [[{ "node": "Normalizar datos Tally",             "type": "main", "index": 0 }]] },
+    "Normalizar datos Tally":         { "main": [[{ "node": "Verificar duplicado",                "type": "main", "index": 0 }]] },
+    "Verificar duplicado":            { "main": [[{ "node": "¿Es duplicado?",                     "type": "main", "index": 0 }]] },
     "¿Es duplicado?": {
       "main": [
         [{ "node": "Prospecto existente (ignorar o actualizar)", "type": "main", "index": 0 }],
         [{ "node": "Registrar prospecto nuevo",                  "type": "main", "index": 0 }]
       ]
     },
-    "Registrar prospecto nuevo":      { "main": [[{ "node": "Registrar en Airtable",           "type": "main", "index": 0 }]] },
-    "Registrar en Airtable":          { "main": [[{ "node": "Notificar equipo Kreditton",       "type": "main", "index": 0 }]] },
-    "Notificar equipo Kreditton":     { "main": [[{ "node": "Respuesta webhook",               "type": "main", "index": 0 }]] },
-    "Prospecto existente (ignorar o actualizar)": { "main": [[{ "node": "Respuesta webhook",   "type": "main", "index": 0 }]] }
+    "Registrar prospecto nuevo":      { "main": [[{ "node": "Registrar en Airtable",              "type": "main", "index": 0 }]] },
+    "Registrar en Airtable":          { "main": [[{ "node": "Notificar equipo Kreditton",         "type": "main", "index": 0 }]] },
+    "Notificar equipo Kreditton":     { "main": [[{ "node": "Respuesta webhook",                  "type": "main", "index": 0 }]] },
+    "Prospecto existente (ignorar o actualizar)": { "main": [[{ "node": "Respuesta webhook",      "type": "main", "index": 0 }]] }
   }
 }

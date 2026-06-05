@@ -10,8 +10,26 @@ import { ScoreGauge } from '../components/ScoreGauge'
 
 type Tab = 'expediente' | 'evaluar' | 'historial'
 
+const ESTADOS_VALIDOS: Estado[] = ['pendiente_validacion', 'en_revision', 'asignado', 'cerrado']
+
+const ESTADO_LABELS: Record<Estado, string> = {
+  pendiente_validacion: 'Pendiente de validación',
+  en_revision: 'En revisión',
+  asignado: 'Asignado',
+  cerrado: 'Cerrado',
+}
+
+const DOC_LABELS: Record<string, string> = {
+  cedula_ciudadania: 'Cédula de ciudadanía',
+  certificado_ingresos: 'Certificado de ingresos',
+  extractos_bancarios: 'Extractos bancarios',
+  compromiso_compraventa: 'Compromiso de compraventa',
+}
+
 const EVAL_INITIAL: FormularioEvaluacion = {
   ingresos: 0,
+  otros_ingresos: 0,
+  obligaciones_mensuales: 0,
   score_credito: 0,
   reportes_negativos: false,
   valor_inmueble: 0,
@@ -34,17 +52,14 @@ export function ProspectDetail() {
   const [tab, setTab] = useState<Tab>('expediente')
   const [error, setError] = useState<string | null>(null)
 
-  // Estado para editar datos del prospecto
   const [editando, setEditando] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Prospecto>>({})
   const [guardando, setGuardando] = useState(false)
 
-  // Estado para el formulario de evaluación
   const [evalForm, setEvalForm] = useState<FormularioEvaluacion>(EVAL_INITIAL)
   const [evaluando, setEvaluando] = useState(false)
   const [evalError, setEvalError] = useState<string | null>(null)
 
-  // Historial expandido
   const [evalAbierta, setEvalAbierta] = useState<number | null>(null)
 
   const cargar = useCallback(async () => {
@@ -52,9 +67,10 @@ export function ProspectDetail() {
     try {
       const p = await api.obtenerProspecto(Number(id))
       setProspecto(p)
-      // Pre-llenar el formulario de evaluación con los últimos datos conocidos
       setEvalForm({
         ingresos: p.ingresos,
+        otros_ingresos: p.otros_ingresos || 0,
+        obligaciones_mensuales: p.obligaciones_mensuales || 0,
         score_credito: p.score_credito || 0,
         reportes_negativos: p.reportes_negativos || false,
         valor_inmueble: p.valor_inmueble || 0,
@@ -81,18 +97,9 @@ export function ProspectDetail() {
     } catch { /* ignore */ }
   }, [id])
 
-  useEffect(() => {
-    cargar()
-  }, [cargar])
-
-  useEffect(() => {
-    if (tab === 'historial') cargarHistorial()
-  }, [tab, cargarHistorial])
-
-  // Si viene de registro nuevo, ir directo a "Evaluar"
-  useEffect(() => {
-    if (location.state?.nuevo) setTab('evaluar')
-  }, [location.state])
+  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { if (tab === 'historial') cargarHistorial() }, [tab, cargarHistorial])
+  useEffect(() => { if (location.state?.nuevo) setTab('evaluar') }, [location.state])
 
   function iniciarEdicion() {
     if (!prospecto) return
@@ -105,7 +112,16 @@ export function ProspectDetail() {
       telefono: prospecto.telefono,
       email: prospecto.email,
       perfil_financiero: prospecto.perfil_financiero,
+      empresa_actual: prospecto.empresa_actual || '',
       ingresos: prospecto.ingresos,
+      otros_ingresos: prospecto.otros_ingresos || 0,
+      obligaciones_mensuales: prospecto.obligaciones_mensuales || 0,
+      valor_inmueble: prospecto.valor_inmueble || 0,
+      monto_solicitado: prospecto.monto_solicitado || 0,
+      cuota_inicial_disponible: prospecto.cuota_inicial_disponible || 0,
+      tipo_inmueble: prospecto.tipo_inmueble || 'nuevo',
+      subtipo_inmueble: prospecto.subtipo_inmueble || 'apartamento',
+      plazo_meses: prospecto.plazo_meses || 180,
       estado: prospecto.estado,
       asesor_asignado: prospecto.asesor_asignado || '',
       notas_internas: prospecto.notas_internas || '',
@@ -137,6 +153,8 @@ export function ProspectDetail() {
       const actualizado = await api.evaluar(Number(id), {
         ...evalForm,
         ingresos: Number(evalForm.ingresos),
+        otros_ingresos: Number(evalForm.otros_ingresos),
+        obligaciones_mensuales: Number(evalForm.obligaciones_mensuales),
         score_credito: Number(evalForm.score_credito),
         valor_inmueble: Number(evalForm.valor_inmueble),
         monto_solicitado: Number(evalForm.monto_solicitado),
@@ -177,6 +195,8 @@ export function ProspectDetail() {
 
   const preview = calcPreview({
     ingresos: Number(evalForm.ingresos),
+    otrosIngresos: Number(evalForm.otros_ingresos),
+    obligacionesMensuales: Number(evalForm.obligaciones_mensuales),
     valorInmueble: Number(evalForm.valor_inmueble),
     montoSolicitado: Number(evalForm.monto_solicitado),
     subtipo: evalForm.subtipo_inmueble,
@@ -215,7 +235,7 @@ export function ProspectDetail() {
         </div>
       </header>
 
-      {/* Si tiene evaluación activa: banner de resultado */}
+      {/* Banner de resultado si tiene evaluación activa */}
       {tieneEval && prospecto.viabilidad && (
         <div className={`border-b px-6 py-3 ${
           prospecto.viabilidad === 'Alta' ? 'bg-green-50 border-green-200' :
@@ -226,6 +246,9 @@ export function ProspectDetail() {
             <span className="font-semibold text-gray-700">Evaluación #{prospecto.numero_evaluacion}</span>
             <span>Score: <strong>{prospecto.score_interno}/100</strong></span>
             {prospecto.cuota_total && <span>Cuota total: <strong>{formatCOP(prospecto.cuota_total)}</strong></span>}
+            {prospecto.carga_total && prospecto.carga_maxima && (
+              <span>Carga: <strong>{formatPct(prospecto.carga_total / prospecto.carga_maxima * 0.40)}</strong> ingresos</span>
+            )}
             {prospecto.ltv && <span>LTV: <strong>{formatPct(prospecto.ltv)}</strong></span>}
             <button
               onClick={() => setTab('evaluar')}
@@ -283,7 +306,7 @@ export function ProspectDetail() {
               )}
             </div>
 
-            {/* Datos de identificación */}
+            {/* Identificación y contacto */}
             <Section title="Identificación y contacto">
               {editando ? (
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -322,8 +345,8 @@ export function ProspectDetail() {
                       <option value="pensionado">Pensionado</option>
                     </select>
                   </EditField>
-                  <EditField label="Ingresos mensuales (COP)">
-                    <input type="number" value={editForm.ingresos} onChange={e => setEditForm(p => ({ ...p, ingresos: Number(e.target.value) }))} className={INPUT} />
+                  <EditField label="Empresa / empleador">
+                    <input value={editForm.empresa_actual || ''} onChange={e => setEditForm(p => ({ ...p, empresa_actual: e.target.value }))} className={INPUT} />
                   </EditField>
                 </div>
               ) : (
@@ -334,24 +357,109 @@ export function ProspectDetail() {
                   <Row label="Teléfono" value={prospecto.telefono} />
                   <Row label="Correo" value={prospecto.email} />
                   <Row label="Perfil laboral" value={prospecto.perfil_financiero} />
-                  <Row label="Ingresos mensuales" value={formatCOP(prospecto.ingresos)} />
+                  {prospecto.empresa_actual && <Row label="Empresa" value={prospecto.empresa_actual} />}
                 </div>
               )}
             </Section>
+
+            {/* Datos financieros del cliente */}
+            <Section title="Información financiera del cliente">
+              {editando ? (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <EditField label="Ingresos mensuales principales (COP)">
+                    <input type="number" value={editForm.ingresos || 0} onChange={e => setEditForm(p => ({ ...p, ingresos: Number(e.target.value) }))} className={INPUT} />
+                  </EditField>
+                  <EditField label="Otros ingresos mensuales (COP)">
+                    <input type="number" value={editForm.otros_ingresos || 0} onChange={e => setEditForm(p => ({ ...p, otros_ingresos: Number(e.target.value) }))} className={INPUT} />
+                  </EditField>
+                  <EditField label="Obligaciones financieras mensuales (COP)">
+                    <input type="number" value={editForm.obligaciones_mensuales || 0} onChange={e => setEditForm(p => ({ ...p, obligaciones_mensuales: Number(e.target.value) }))} className={INPUT} />
+                  </EditField>
+                  <EditField label="Cuota inicial disponible (COP)">
+                    <input type="number" value={editForm.cuota_inicial_disponible || 0} onChange={e => setEditForm(p => ({ ...p, cuota_inicial_disponible: Number(e.target.value) }))} className={INPUT} />
+                  </EditField>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-x-8">
+                  <Row label="Ingresos principales" value={formatCOP(prospecto.ingresos)} />
+                  <Row label="Otros ingresos" value={prospecto.otros_ingresos > 0 ? formatCOP(prospecto.otros_ingresos) : '—'} />
+                  <Row label="Total ingresos" value={<strong>{formatCOP(prospecto.ingresos + (prospecto.otros_ingresos || 0))}</strong>} />
+                  <Row label="Obligaciones mensuales" value={prospecto.obligaciones_mensuales > 0 ? formatCOP(prospecto.obligaciones_mensuales) : '—'} />
+                  {prospecto.cuota_inicial_disponible && (
+                    <Row label="Cuota inicial disponible" value={formatCOP(prospecto.cuota_inicial_disponible)} />
+                  )}
+                </div>
+              )}
+            </Section>
+
+            {/* Datos del inmueble */}
+            <Section title="Datos del inmueble y crédito">
+              {editando ? (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <EditField label="Valor del inmueble (COP)">
+                    <input type="number" value={editForm.valor_inmueble || 0} onChange={e => setEditForm(p => ({ ...p, valor_inmueble: Number(e.target.value) }))} className={INPUT} />
+                  </EditField>
+                  <EditField label="Monto solicitado (COP)">
+                    <input type="number" value={editForm.monto_solicitado || 0} onChange={e => setEditForm(p => ({ ...p, monto_solicitado: Number(e.target.value) }))} className={INPUT} />
+                  </EditField>
+                  <EditField label="Tipo de inmueble">
+                    <select value={editForm.tipo_inmueble || 'nuevo'} onChange={e => setEditForm(p => ({ ...p, tipo_inmueble: e.target.value }))} className={SELECT}>
+                      <option value="nuevo">Nuevo</option>
+                      <option value="usado">Usado</option>
+                    </select>
+                  </EditField>
+                  <EditField label="Subtipo">
+                    <select value={editForm.subtipo_inmueble || 'apartamento'} onChange={e => setEditForm(p => ({ ...p, subtipo_inmueble: e.target.value }))} className={SELECT}>
+                      <option value="apartamento">Apartamento</option>
+                      <option value="casa">Casa</option>
+                    </select>
+                  </EditField>
+                  <EditField label="Plazo deseado (meses)">
+                    <select value={editForm.plazo_meses || 180} onChange={e => setEditForm(p => ({ ...p, plazo_meses: Number(e.target.value) }))} className={SELECT}>
+                      <option value={60}>60 meses (5 años)</option>
+                      <option value={120}>120 meses (10 años)</option>
+                      <option value={180}>180 meses (15 años)</option>
+                      <option value={240}>240 meses (20 años)</option>
+                    </select>
+                  </EditField>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-x-8">
+                  {prospecto.valor_inmueble ? <Row label="Valor inmueble" value={formatCOP(prospecto.valor_inmueble)} /> : <Row label="Valor inmueble" value="—" />}
+                  {prospecto.monto_solicitado ? <Row label="Monto solicitado" value={formatCOP(prospecto.monto_solicitado)} /> : <Row label="Monto solicitado" value="—" />}
+                  {prospecto.cuota_inicial_disponible && <Row label="Cuota inicial" value={formatCOP(prospecto.cuota_inicial_disponible)} />}
+                  <Row label="Tipo de inmueble" value={prospecto.tipo_inmueble ? `${prospecto.tipo_inmueble} · ${prospecto.subtipo_inmueble}` : '—'} />
+                  <Row label="Plazo deseado" value={prospecto.plazo_meses ? `${prospecto.plazo_meses} meses (${Math.round(prospecto.plazo_meses / 12)} años)` : '—'} />
+                </div>
+              )}
+            </Section>
+
+            {/* Documentos indicados por el cliente */}
+            {prospecto.documentos_adjuntos && prospecto.documentos_adjuntos.length > 0 && (
+              <Section title="Documentos indicados por el cliente">
+                <ul className="space-y-1.5">
+                  {prospecto.documentos_adjuntos.map(d => (
+                    <li key={d} className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="text-green-500 text-base">✓</span>
+                      {DOC_LABELS[d] || d}
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
 
             {/* Resultado de evaluación activa */}
             {tieneEval && (
               <Section title="Evaluación activa">
                 <div className="grid sm:grid-cols-2 gap-x-8">
-                  <Row label="Score crédito externo" value={prospecto.score_credito ?? '—'} />
+                  <Row label="Score crédito (Datacrédito)" value={prospecto.score_credito ?? '—'} />
                   <Row label="Reportes negativos" value={prospecto.reportes_negativos ? 'Sí' : 'No'} />
-                  <Row label="Documentación" value={prospecto.documentacion ?? '—'} />
-                  <Row label="Valor del inmueble" value={prospecto.valor_inmueble ? formatCOP(prospecto.valor_inmueble) : '—'} />
-                  <Row label="Monto solicitado" value={prospecto.monto_solicitado ? formatCOP(prospecto.monto_solicitado) : '—'} />
+                  <Row label="Estado de documentación" value={prospecto.documentacion ?? '—'} />
                   <Row label="LTV" value={prospecto.ltv ? formatPct(prospecto.ltv) : '—'} />
-                  <Row label="Plazo" value={prospecto.plazo_meses ? `${prospecto.plazo_meses} meses` : '—'} />
-                  <Row label="Cuota total estimada" value={prospecto.cuota_total ? formatCOP(prospecto.cuota_total) : '—'} />
-                  <Row label="Cuota máxima (40%)" value={prospecto.cuota_maxima ? formatCOP(prospecto.cuota_maxima) : '—'} />
+                  <Row label="Cuota hipoteca estimada" value={prospecto.cuota_total ? formatCOP(prospecto.cuota_total) : '—'} />
+                  <Row label="Carga financiera total" value={prospecto.carga_total ? formatCOP(prospecto.carga_total) : '—'} />
+                  <Row label="Tope de carga (40% ingresos)" value={prospecto.carga_maxima ? formatCOP(prospecto.carga_maxima) : '—'} />
+                  <Row label="Ingreso mín. requerido" value={prospecto.ingreso_minimo_requerido ? formatCOP(prospecto.ingreso_minimo_requerido) : '—'} />
                 </div>
                 {prospecto.factores_clasificacion.length > 0 && (
                   <div className="mt-3">
@@ -384,23 +492,22 @@ export function ProspectDetail() {
             {!tieneEval && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-4 text-center space-y-3">
                 <p className="text-sm font-semibold text-yellow-800">Este prospecto aún no ha sido evaluado</p>
-                <p className="text-xs text-yellow-700">Complete los datos internos (score crediticio, monto, plazo, documentación) y ejecute la preevaluación.</p>
+                <p className="text-xs text-yellow-700">Complete los datos internos (score crediticio, verificación de reportes, estado documental) y ejecute la preevaluación.</p>
                 <button onClick={() => setTab('evaluar')} className={BTN_PRIMARY}>
                   Ir a Preevaluar →
                 </button>
               </div>
             )}
 
-            {/* Gestión */}
-            <Section title="Gestión interna">
+            {/* Gestión interna */}
+            <Section title="Gestión interna (Kreditton)">
               {editando ? (
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <EditField label="Estado">
+                  <EditField label="Estado comercial">
                     <select value={editForm.estado} onChange={e => setEditForm(p => ({ ...p, estado: e.target.value as Estado }))} className={SELECT}>
-                      <option value="nuevo">Nuevo</option>
-                      <option value="en_revision">En revisión</option>
-                      <option value="asignado">Asignado</option>
-                      <option value="cerrado">Cerrado</option>
+                      {ESTADOS_VALIDOS.map(e => (
+                        <option key={e} value={e}>{ESTADO_LABELS[e]}</option>
+                      ))}
                     </select>
                   </EditField>
                   <EditField label="Asesor asignado">
@@ -424,8 +531,8 @@ export function ProspectDetail() {
               )}
               {!editando && (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="text-xs text-gray-500 self-center">Cambiar estado rápido:</span>
-                  {(['nuevo', 'en_revision', 'asignado', 'cerrado'] as Estado[]).map(e => (
+                  <span className="text-xs text-gray-500 self-center">Cambiar estado:</span>
+                  {ESTADOS_VALIDOS.map(e => (
                     <button
                       key={e}
                       onClick={() => handleEstado(e)}
@@ -435,7 +542,7 @@ export function ProspectDetail() {
                           : 'border-gray-300 text-gray-600 hover:bg-gray-100'
                       }`}
                     >
-                      {e.replace('_', ' ')}
+                      {ESTADO_LABELS[e]}
                     </button>
                   ))}
                 </div>
@@ -454,8 +561,8 @@ export function ProspectDetail() {
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {tieneEval
-                    ? 'Complete o modifique los campos y haga clic en Recalcular. Se guardará como nueva evaluación sin borrar la anterior.'
-                    : 'Complete los campos internos para ejecutar la preevaluación.'}
+                    ? 'Modifique los campos y haga clic en Recalcular. Se guardará como nueva evaluación sin borrar la anterior.'
+                    : 'Complete los campos internos para ejecutar la preevaluación. Los datos del cliente ya están pre-cargados.'}
                 </p>
               </div>
             </div>
@@ -464,8 +571,8 @@ export function ProspectDetail() {
               {/* Formulario */}
               <div className="lg:col-span-2 space-y-5">
 
-                {/* Datos internos de Kreditton */}
-                <Card title="Datos internos (Kreditton)">
+                {/* Datos internos — solo Kreditton */}
+                <Card title="Datos internos (solo Kreditton)">
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <ELabel required>Score crediticio (Datacrédito/TransUnion)</ELabel>
@@ -478,15 +585,14 @@ export function ProspectDetail() {
                       <p className="text-xs text-gray-400 mt-1">Rango válido: 300 – 900</p>
                     </div>
                     <div>
-                      <ELabel required>Ingresos mensuales (COP)</ELabel>
-                      <input
-                        type="number" min="0" step="100000"
-                        value={evalForm.ingresos || ''}
-                        onChange={e => setEval('ingresos', Number(e.target.value))}
-                        className={INPUT} placeholder="8000000" required
-                      />
+                      <ELabel required>Estado de la documentación</ELabel>
+                      <select value={evalForm.documentacion} onChange={e => setEval('documentacion', e.target.value)} className={SELECT}>
+                        <option value="completa">Completa — Todos los documentos entregados</option>
+                        <option value="parcial">Parcial — Faltan algunos documentos</option>
+                        <option value="incompleta">Incompleta — Sin documentación suficiente</option>
+                      </select>
                     </div>
-                    <div className="flex items-start gap-3 pt-4">
+                    <div className="sm:col-span-2 flex items-start gap-3 pt-1">
                       <input
                         type="checkbox"
                         id="rep"
@@ -498,13 +604,40 @@ export function ProspectDetail() {
                         Tiene reportes negativos en centrales de riesgo
                       </label>
                     </div>
+                  </div>
+                </Card>
+
+                {/* Datos financieros — pre-llenados del cliente, ajustables */}
+                <Card title="Datos financieros (verificados internamente)">
+                  <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <ELabel required>Estado de la documentación</ELabel>
-                      <select value={evalForm.documentacion} onChange={e => setEval('documentacion', e.target.value)} className={SELECT}>
-                        <option value="completa">Completa — Todos los documentos entregados</option>
-                        <option value="parcial">Parcial — Faltan algunos documentos</option>
-                        <option value="incompleta">Incompleta — Sin documentación suficiente</option>
-                      </select>
+                      <ELabel required>Ingresos mensuales principales (COP)</ELabel>
+                      <input
+                        type="number" min="0" step="100000"
+                        value={evalForm.ingresos || ''}
+                        onChange={e => setEval('ingresos', Number(e.target.value))}
+                        className={INPUT} placeholder="8000000" required
+                      />
+                    </div>
+                    <div>
+                      <ELabel>Otros ingresos mensuales (COP)</ELabel>
+                      <input
+                        type="number" min="0" step="100000"
+                        value={evalForm.otros_ingresos || ''}
+                        onChange={e => setEval('otros_ingresos', Number(e.target.value))}
+                        className={INPUT} placeholder="0"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Arriendos, honorarios, pensiones, etc.</p>
+                    </div>
+                    <div>
+                      <ELabel>Obligaciones mensuales actuales (COP)</ELabel>
+                      <input
+                        type="number" min="0" step="100000"
+                        value={evalForm.obligaciones_mensuales || ''}
+                        onChange={e => setEval('obligaciones_mensuales', Number(e.target.value))}
+                        className={INPUT} placeholder="0"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Cuotas de créditos, tarjetas, vehículo, etc.</p>
                     </div>
                   </div>
                 </Card>
@@ -557,7 +690,7 @@ export function ProspectDetail() {
                       </div>
                     </div>
                     <div className="sm:col-span-2">
-                      <ELabel>Observaciones</ELabel>
+                      <ELabel>Observaciones del analista</ELabel>
                       <textarea
                         value={evalForm.observaciones}
                         onChange={e => setEval('observaciones', e.target.value)}
@@ -590,7 +723,7 @@ export function ProspectDetail() {
                 >
                   {evaluando
                     ? 'Procesando preevaluación…'
-                    : tieneEval ? '↺ Recalcular viabilidad' : 'Preevaluar →'}
+                    : tieneEval ? '↺ Recalcular viabilidad' : 'Ejecutar preevaluación →'}
                 </button>
               </div>
 
@@ -606,17 +739,24 @@ export function ProspectDetail() {
                         <PreviewRow label="Cuota sin seguro" value={formatCOP(preview.cuotaSinSeguro)} />
                         <PreviewRow label="Seguro de vida" value={formatCOP(preview.seguroVida)} />
                         <PreviewRow label="Seguro incendio" value={formatCOP(preview.seguroIncendio)} />
+                        <div className="rounded-lg p-3 mt-1 bg-gray-50 border border-gray-200">
+                          <div className="text-xs text-gray-500 mb-0.5">Cuota hipoteca</div>
+                          <div className="text-lg font-bold text-gray-800">{formatCOP(preview.cuotaTotal)}</div>
+                        </div>
+                        {Number(evalForm.obligaciones_mensuales) > 0 && (
+                          <PreviewRow label="+ Obligaciones actuales" value={formatCOP(Number(evalForm.obligaciones_mensuales))} />
+                        )}
                         <div className={`rounded-lg p-3 mt-1 ${preview.excede ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-                          <div className="text-xs text-gray-500 mb-0.5">Cuota total estimada</div>
-                          <div className={`text-xl font-bold ${preview.excede ? 'text-red-700' : 'text-green-700'}`}>{formatCOP(preview.cuotaTotal)}</div>
+                          <div className="text-xs text-gray-500 mb-0.5">Carga financiera total</div>
+                          <div className={`text-xl font-bold ${preview.excede ? 'text-red-700' : 'text-green-700'}`}>{formatCOP(preview.cargaTotal)}</div>
                         </div>
                         <div className="rounded-lg p-3 bg-gray-50 border border-gray-200">
-                          <div className="text-xs text-gray-500 mb-0.5">Cuota máxima (40% ingresos)</div>
-                          <div className="text-lg font-semibold text-gray-700">{formatCOP(preview.cuotaMaxima)}</div>
+                          <div className="text-xs text-gray-500 mb-0.5">Tope 40% ingresos totales</div>
+                          <div className="text-lg font-semibold text-gray-700">{formatCOP(preview.cargaMaxima)}</div>
                         </div>
                         {preview.excede && (
                           <div className="bg-red-100 text-red-700 text-xs rounded-lg px-3 py-2">
-                            ⚠ Cuota supera el límite → Viabilidad probable: <strong>Baja</strong>
+                            ⚠ Carga total supera el 40% → Viabilidad probable: <strong>Baja</strong>
                           </div>
                         )}
                         <PreviewRow label="LTV estimado" value={formatPct(preview.ltv)} />
@@ -628,7 +768,7 @@ export function ProspectDetail() {
                   <div className="bg-brand-dark text-white rounded-xl p-4 text-xs space-y-1.5">
                     <p className="font-semibold text-brand-yellow text-sm mb-2">Parámetros Kreditton</p>
                     <p>Tasa E.A.: <strong>15.5%</strong></p>
-                    <p>Máx. endeudamiento: <strong>40% ingresos</strong></p>
+                    <p>Carga máxima: <strong>40% ingresos totales</strong></p>
                     <p>Alta: LTV ≤ 80%, score ≥ 700, docs completa</p>
                     <p>Media: LTV ≤ 90%, score ≥ 600</p>
                     <p>Baja: cualquier disqualificador</p>
@@ -672,7 +812,9 @@ export function ProspectDetail() {
 
                     {evalAbierta === ev.id && (
                       <div className="border-t px-5 py-4 grid sm:grid-cols-2 gap-x-8 gap-y-0">
-                        <Row label="Ingresos" value={formatCOP(ev.ingresos)} />
+                        <Row label="Ingresos principales" value={formatCOP(ev.ingresos)} />
+                        {ev.otros_ingresos > 0 && <Row label="Otros ingresos" value={formatCOP(ev.otros_ingresos)} />}
+                        {ev.obligaciones_mensuales > 0 && <Row label="Obligaciones mensuales" value={formatCOP(ev.obligaciones_mensuales)} />}
                         <Row label="Score crédito" value={ev.score_credito} />
                         <Row label="Reportes negativos" value={ev.reportes_negativos ? 'Sí' : 'No'} />
                         <Row label="Documentación" value={ev.documentacion} />
@@ -680,11 +822,9 @@ export function ProspectDetail() {
                         <Row label="Monto solicitado" value={formatCOP(ev.monto_solicitado)} />
                         <Row label="LTV" value={formatPct(ev.ltv)} />
                         <Row label="Plazo" value={`${ev.plazo_meses} meses`} />
-                        <Row label="Cuota sin seguro" value={formatCOP(ev.cuota_sin_seguro)} />
-                        <Row label="Seguro vida" value={formatCOP(ev.seguro_vida)} />
-                        <Row label="Seguro incendio" value={formatCOP(ev.seguro_incendio)} />
-                        <Row label="Cuota total" value={formatCOP(ev.cuota_total)} />
-                        <Row label="Cuota máxima (40%)" value={formatCOP(ev.cuota_maxima)} />
+                        <Row label="Cuota hipoteca" value={formatCOP(ev.cuota_total)} />
+                        <Row label="Carga financiera total" value={formatCOP(ev.carga_total)} />
+                        <Row label="Tope 40% (carga máx.)" value={formatCOP(ev.carga_maxima)} />
                         <Row label="Ingreso mín. requerido" value={formatCOP(ev.ingreso_minimo_requerido)} />
                         {ev.detalle_score.length > 0 && (
                           <div className="sm:col-span-2 mt-2">
